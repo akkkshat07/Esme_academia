@@ -119,32 +119,44 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Helper to detect language from content text
+function detectLanguage(row) {
+  // Row indices: 1=Subcategory, 2=Topic, 3=Title
+  const text = ((row[1] || '') + ' ' + (row[2] || '') + ' ' + (row[3] || '')).toLowerCase();
+  
+  // Check for 'hindi' word boundary or explicit suffix
+  if (text.includes('hindi')) {
+    return 'Hindi';
+  }
+  return 'English';
+}
+
 // ---------- GET /api/courses ----------
-// Courses tab layout (A..K):
-// A Main Category | B Subcategory | C Topic | D Video Title | E Description | F URL
-// G duration_seconds | H type | I thumbnailUrl | J download (Yes/No) | K language
 app.get('/api/courses', async (req, res) => {
   try {
     const sheets = await sheetsClient();
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SHEET_ID,
-      range: 'Courses!A2:K'
+      range: 'Courses!A2:J'
     });
 
     const rows = resp.data.values || [];
-    const list = rows.map((r) => ({
-      mainCategory: r[0] || '',
-      subcategory: r[1] || '',
-      topic: r[2] || '',
-      title: r[3] || '',
-      description: r[4] || '',
-      url: r[5] || '',
-      duration_seconds: Number(r[6] || 0),
-      type: (r[7] || 'video').toLowerCase(),
-      thumbnailUrl: r[8] || '',
-      downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
-      language: (r[10] || 'English').trim()
-    }));
+    const list = rows.map((r) => {
+      const lang = detectLanguage(r);
+      return {
+        mainCategory: r[0] || '',
+        subcategory: r[1] || '',
+        topic: r[2] || '',
+        title: r[3] || '',
+        description: r[4] || '',
+        url: r[5] || '',
+        duration_seconds: Number(r[6] || 0),
+        type: (r[7] || 'video').toLowerCase(),
+        thumbnailUrl: r[8] || '',
+        downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
+        language: lang
+      }
+    });
 
     res.json({ ok: true, data: list });
   } catch (e) {
@@ -156,32 +168,11 @@ app.get('/api/courses', async (req, res) => {
 // ---------- GET /api/languages ----------
 // Get all available languages
 app.get('/api/languages', async (req, res) => {
-  try {
-    const sheets = await sheetsClient();
-    const resp = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Courses!K2:K'
-    });
-
-    const rows = resp.data.values || [];
-    // Read from column K (index 10)
-    let languages = rows.map(r => (r[10] || '').trim()).filter(Boolean);
-    
-    // Always ensuring English and Hindi exist for the UI, even if not in sheet yet
-    const unique = new Set(languages);
-    unique.add('English');
-    unique.add('Hindi');
-    
-    const finalLanguages = [...unique].sort();
-
-    res.json({ ok: true, data: finalLanguages });
-  } catch (e) {
-    console.error('GET /api/languages error:', e.message);
-    res.json({ ok: true, data: ['English', 'Hindi'] });
-  }
+  // Since language is derived from content, we return fixed options we support detecting
+  res.json({ ok: true, data: ['English', 'Hindi'] });
 });
 
-// ---------- GET /api/courses?language=... ----------
+// ---------- GET /api/courses/filter?language=... ----------
 // Filter courses by language
 app.get('/api/courses/filter', async (req, res) => {
   try {
@@ -189,16 +180,20 @@ app.get('/api/courses/filter', async (req, res) => {
     const sheets = await sheetsClient();
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SHEET_ID,
-      range: 'Courses!A2:K'
+      range: 'Courses!A2:J'
     });
 
     const rows = resp.data.values || [];
     const list = rows
-      .filter(r => {
-        const lang = (r[10] || 'English').trim();
-        return lang === language;
+      .map((r) => {
+        const lang = detectLanguage(r);
+        return {
+          row: r,
+          language: lang
+        };
       })
-      .map((r) => ({
+      .filter(item => item.language === language)
+      .map(({ row: r, language: lang }) => ({
         mainCategory: r[0] || '',
         subcategory: r[1] || '',
         topic: r[2] || '',
@@ -209,7 +204,7 @@ app.get('/api/courses/filter', async (req, res) => {
         type: (r[7] || 'video').toLowerCase(),
         thumbnailUrl: r[8] || '',
         downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
-        language: (r[10] || 'English').trim()
+        language: lang
       }));
 
     res.json({ ok: true, data: list });
