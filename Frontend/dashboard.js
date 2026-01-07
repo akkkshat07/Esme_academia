@@ -250,16 +250,16 @@
 
     const rowsHtml = rows.map(r => {
       let medalIcon = '';
-      if (r.medal === 'gold') medalIcon = '??';
-      else if (r.medal === 'silver') medalIcon = '??';
-      else if (r.medal === 'bronze') medalIcon = '??';
+      if (r.medal === 'gold') medalIcon = '🥇';
+      else if (r.medal === 'silver') medalIcon = '🥈';
+      else if (r.medal === 'bronze') medalIcon = '🥉';
 
       return `
         <tr>
-          <td>${r.rank}</td>
-          <td>${medalIcon ? `${medalIcon} ` : ''}${r.name}</td>
-          <td>${r.hours}</td>
-          <td>${r.courseCount}</td>
+          <td style="padding:.5rem;border-bottom:1px solid #e5eaf0;">${r.rank}</td>
+          <td style="padding:.5rem;border-bottom:1px solid #e5eaf0;">${medalIcon ? `${medalIcon} ` : ''}${r.name}</td>
+          <td style="padding:.5rem;border-bottom:1px solid #e5eaf0;">${r.hours}</td>
+          <td style="padding:.5rem;border-bottom:1px solid #e5eaf0;">${r.courseCount}</td>
         </tr>
       `;
     }).join('');
