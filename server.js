@@ -164,12 +164,20 @@ app.get('/api/languages', async (req, res) => {
     });
 
     const rows = resp.data.values || [];
-    const languages = [...new Set(rows.map(r => (r[0] || 'English').trim()))].sort();
+    // Read from column K (index 10)
+    let languages = rows.map(r => (r[10] || '').trim()).filter(Boolean);
     
-    res.json({ ok: true, data: languages });
+    // Always ensuring English and Hindi exist for the UI, even if not in sheet yet
+    const unique = new Set(languages);
+    unique.add('English');
+    unique.add('Hindi');
+    
+    const finalLanguages = [...unique].sort();
+
+    res.json({ ok: true, data: finalLanguages });
   } catch (e) {
     console.error('GET /api/languages error:', e.message);
-    res.status(500).json({ ok: false, message: 'Failed to fetch languages' });
+    res.json({ ok: true, data: ['English', 'Hindi'] });
   }
 });
 

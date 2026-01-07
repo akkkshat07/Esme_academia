@@ -1,24 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <      <header class="dashboard-header">
-        <div class="header-left">
-          <h1>Welcome, <span id="user-name">User</span>!</h1>
-          <p>Pick a category or search any topic.</p>
-        </div>
-        <div class="header-right">
-          <label for="language-filter" style="display:flex;align-items:center;gap:0.5rem;font-weight:500;color:#2c3e50;">
-            Language:
-            <select id="language-filter" style="padding:0.5rem 0.75rem;border:1px solid #d9e1e7;border-radius:6px;font-size:14px;cursor:pointer;background-color:#fff;">
-              <option value="">All Languages</option>
-            </select>
-          </label>
-        </div>
-      </header>
-
-      <div class="search-row">
-        <input id="search-input" class="dashboard-search" placeholder="Search for courses…" />
-      </div>rset="utf-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>ESME Learning � Dashboard</title>
   <link rel="stylesheet" href="styles.css">
@@ -59,8 +42,18 @@
     <!-- Main content -->
     <main class="dashboard-content">
       <header class="dashboard-header">
-        <h1>Welcome, <span id="user-name">User</span>!</h1>
-        <p>Pick a category or search any topic.</p>
+        <div class="header-left">
+          <h1>Welcome, <span id="user-name">User</span>!</h1>
+          <p>Pick a category or search any topic.</p>
+        </div>
+        <div class="header-right">
+          <label for="language-filter" class="language-filter-label">
+            Language:
+            <select id="language-filter" class="language-select">
+              <option value="">All Languages</option>
+            </select>
+          </label>
+        </div>
       </header>
 
       <div class="search-row">
