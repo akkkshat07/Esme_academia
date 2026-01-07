@@ -1,4 +1,4 @@
-// LMS backend (CommonJS) — login + courses + assigned + completions + health
+// LMS backend (CommonJS) ï¿½ login + courses + assigned + completions + health
 // Uses Google Sheet tabs & Firebase Storage URLs
 
 require('dotenv').config();
@@ -120,15 +120,15 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ---------- GET /api/courses ----------
-// Courses tab layout (A..J):
+// Courses tab layout (A..K):
 // A Main Category | B Subcategory | C Topic | D Video Title | E Description | F URL
-// G duration_seconds | H type | I thumbnailUrl | J download (Yes/No)
+// G duration_seconds | H type | I thumbnailUrl | J download (Yes/No) | K language
 app.get('/api/courses', async (req, res) => {
   try {
     const sheets = await sheetsClient();
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SHEET_ID,
-      range: 'Courses!A2:J'
+      range: 'Courses!A2:K'
     });
 
     const rows = resp.data.values || [];
@@ -142,13 +142,72 @@ app.get('/api/courses', async (req, res) => {
       duration_seconds: Number(r[6] || 0),
       type: (r[7] || 'video').toLowerCase(),
       thumbnailUrl: r[8] || '',
-      downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim())
+      downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
+      language: (r[10] || 'English').trim()
     }));
 
     res.json({ ok: true, data: list });
   } catch (e) {
     console.error('GET /api/courses error:', e.message);
     res.status(500).json({ ok: false, message: 'Failed to fetch courses' });
+  }
+});
+
+// ---------- GET /api/languages ----------
+// Get all available languages
+app.get('/api/languages', async (req, res) => {
+  try {
+    const sheets = await sheetsClient();
+    const resp = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SHEET_ID,
+      range: 'Courses!K2:K'
+    });
+
+    const rows = resp.data.values || [];
+    const languages = [...new Set(rows.map(r => (r[0] || 'English').trim()))].sort();
+    
+    res.json({ ok: true, data: languages });
+  } catch (e) {
+    console.error('GET /api/languages error:', e.message);
+    res.status(500).json({ ok: false, message: 'Failed to fetch languages' });
+  }
+});
+
+// ---------- GET /api/courses?language=... ----------
+// Filter courses by language
+app.get('/api/courses/filter', async (req, res) => {
+  try {
+    const language = String(req.query.language || 'English').trim();
+    const sheets = await sheetsClient();
+    const resp = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SHEET_ID,
+      range: 'Courses!A2:K'
+    });
+
+    const rows = resp.data.values || [];
+    const list = rows
+      .filter(r => {
+        const lang = (r[10] || 'English').trim();
+        return lang === language;
+      })
+      .map((r) => ({
+        mainCategory: r[0] || '',
+        subcategory: r[1] || '',
+        topic: r[2] || '',
+        title: r[3] || '',
+        description: r[4] || '',
+        url: r[5] || '',
+        duration_seconds: Number(r[6] || 0),
+        type: (r[7] || 'video').toLowerCase(),
+        thumbnailUrl: r[8] || '',
+        downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
+        language: (r[10] || 'English').trim()
+      }));
+
+    res.json({ ok: true, data: list });
+  } catch (e) {
+    console.error('GET /api/courses/filter error:', e.message);
+    res.status(500).json({ ok: false, message: 'Failed to filter courses' });
   }
 });
 

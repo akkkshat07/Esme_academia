@@ -1,4 +1,4 @@
-// dashboard.js — LMS dashboard with tabs & mobile menu
+// dashboard.js ï¿½ LMS dashboard with tabs & mobile menu
 (() => {
   'use strict';
 
@@ -18,6 +18,7 @@
   const feedbackForm = $('#feedback-form');
   const feedbackText = $('#feedback-text');
   const feedbackStatus = $('#feedback-status');
+  const languageFilter = $('#language-filter');
 
   const sidebar    = $('#sidebar');
   const backdrop   = $('#sidebar-backdrop');
@@ -38,6 +39,8 @@
   let quizzes = [];
   let assignedQuizzes = [];
   let currentTab = 'all';
+  let availableLanguages = [];
+  let selectedLanguage = ''; // '' means all languages
 
   // === Utility ===
   function ensureUser() {
@@ -56,7 +59,7 @@
 
   function buildPlayerUrl(course) {
     const catLabel = course.mainCategory
-      ? (course.subcategory ? `${course.mainCategory} › ${course.subcategory}` : course.mainCategory)
+      ? (course.subcategory ? `${course.mainCategory} ï¿½ ${course.subcategory}` : course.mainCategory)
       : '';
     const params = new URLSearchParams({
       title: course.title || '',
@@ -80,6 +83,7 @@
       type: (r.type || 'video').toLowerCase(),
       thumbnailUrl: r.thumbnailUrl || '',
       downloadAllowed: !!r.downloadAllowed,
+      language: r.language || 'English',
       due_date: r.due_date || null,
       required_percent: Number(r.required_percent || 0) || 0,
       assigned: !!r.assigned
@@ -115,9 +119,9 @@
 
   function courseCard(course, opts = {}) {
     const thumb = course.thumbnailUrl || 'img/placeholder.jpg';
-    const dur   = course.duration_seconds ? ` • ${Math.round(course.duration_seconds / 60)} min` : '';
+    const dur   = course.duration_seconds ? ` ï¿½ ${Math.round(course.duration_seconds / 60)} min` : '';
     const catLabel = course.mainCategory
-      ? (course.subcategory ? `${course.mainCategory} · ${course.subcategory}` : course.mainCategory)
+      ? (course.subcategory ? `${course.mainCategory} ï¿½ ${course.subcategory}` : course.mainCategory)
       : '';
     const href  = buildPlayerUrl(course);
     const downloadLabel = course.downloadAllowed ? 'Download: Yes' : 'Download: No';
@@ -146,12 +150,17 @@
     `;
   }
 
+  function filterByLanguage(courses) {
+    if (!selectedLanguage) return courses; // empty string = all languages
+    return courses.filter(c => (c.language || 'English') === selectedLanguage);
+  }
+
   function renderAllCourses() {
     const activeCat = decodeURIComponent($('.chip.active')?.dataset.cat || '');
     const activeSub = decodeURIComponent($('.chip--sub.active')?.dataset.sub || '');
     const q = (searchEl.value || '').toLowerCase().trim();
 
-    const list = allCourses.filter(c => {
+    let list = allCourses.filter(c => {
       if (activeCat && c.mainCategory !== activeCat) return false;
       if (activeSub && c.subcategory !== activeSub) return false;
       if (!q) return true;
@@ -162,20 +171,25 @@
       );
     });
 
+    // Apply language filter
+    list = filterByLanguage(list);
+
     allAreaEl.innerHTML = list.length
       ? list.map(c => courseCard(c)).join('')
       : `<p style="opacity:.7">No courses match your search.</p>`;
   }
 
   function renderAssignedCourses() {
-    if (!assignedCourses.length) {
-      assignedEl.innerHTML = `<p style="opacity:.7">No courses have been assigned to you yet.</p>`;
+    let filteredCourses = filterByLanguage(assignedCourses);
+    
+    if (!filteredCourses.length) {
+      assignedEl.innerHTML = `<p style="opacity:.7">No assigned courses match your language filter.</p>`;
       assignedSum.textContent = '';
       return;
     }
 
     // sort by due date if present
-    const sorted = [...assignedCourses].sort((a, b) => {
+    const sorted = [...filteredCourses].sort((a, b) => {
       if (!a.due_date && !b.due_date) return 0;
       if (!a.due_date) return 1;
       if (!b.due_date) return -1;
@@ -335,6 +349,17 @@
       }
     });
 
+    // language filter
+    if (languageFilter) {
+      languageFilter.addEventListener('change', (e) => {
+        selectedLanguage = e.target.value;
+        localStorage.setItem('selectedLanguage', selectedLanguage);
+        renderAllCourses();
+        renderAssignedCourses();
+        renderQuizzes(); // Also filter quizzes if they have language field
+      });
+    }
+
     // tabs
     tabAll.addEventListener('click', () => setActiveTab('all'));
     tabAssigned.addEventListener('click', () => setActiveTab('assigned'));
@@ -369,7 +394,7 @@
           feedbackStatus.style.color = '#b91c1c';
           return;
         }
-        feedbackStatus.textContent = 'Sending…';
+        feedbackStatus.textContent = 'Sendingï¿½';
         feedbackStatus.style.color = '#4b5563';
         try {
           const resp = await fetch('/api/feedback', {
@@ -405,7 +430,34 @@
     return data.data || [];
   }
 
+  async function populateLanguages() {
+    try {
+      const languages = await fetchJSON('/api/languages');
+      availableLanguages = languages;
+      
+      if (languageFilter) {
+        languageFilter.innerHTML = '<option value="">All Languages</option>';
+        languages.forEach(lang => {
+          const option = document.createElement('option');
+          option.value = lang;
+          option.textContent = lang;
+          languageFilter.appendChild(option);
+        });
+        
+        // Restore user's previous language preference
+        const savedLang = localStorage.getItem('selectedLanguage') || '';
+        selectedLanguage = savedLang;
+        languageFilter.value = savedLang;
+      }
+    } catch (err) {
+      console.error('Failed to load languages:', err);
+    }
+  }
+
   async function loadAll() {
+    // Load available languages first
+    await populateLanguages();
+
     try {
       // Courses
       const coursesData = await fetchJSON('/api/courses');

@@ -1,9 +1,26 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <      <header class="dashboard-header">
+        <div class="header-left">
+          <h1>Welcome, <span id="user-name">User</span>!</h1>
+          <p>Pick a category or search any topic.</p>
+        </div>
+        <div class="header-right">
+          <label for="language-filter" style="display:flex;align-items:center;gap:0.5rem;font-weight:500;color:#2c3e50;">
+            Language:
+            <select id="language-filter" style="padding:0.5rem 0.75rem;border:1px solid #d9e1e7;border-radius:6px;font-size:14px;cursor:pointer;background-color:#fff;">
+              <option value="">All Languages</option>
+            </select>
+          </label>
+        </div>
+      </header>
+
+      <div class="search-row">
+        <input id="search-input" class="dashboard-search" placeholder="Search for coursesâ€¦" />
+      </div>rset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>ESME Learning – Dashboard</title>
+  <title>ESME Learning ï¿½ Dashboard</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="dashboard-bg">
@@ -47,7 +64,7 @@
       </header>
 
       <div class="search-row">
-        <input id="search-input" class="dashboard-search" placeholder="Search for courses…" />
+        <input id="search-input" class="dashboard-search" placeholder="Search for coursesï¿½" />
       </div>
 
       <!-- Category chips -->
@@ -96,7 +113,7 @@
           <textarea id="feedback-text"
                     rows="5"
                     style="width:100%;padding:.8rem;border-radius:8px;border:1px solid #d9e1e7;font-family:inherit;font-size:14px;"
-                    placeholder="Write your feedback here…"></textarea>
+                    placeholder="Write your feedback hereï¿½"></textarea>
           <button type="submit"
                   style="margin-top:.75rem;background:#0ea5e9;border:none;border-radius:8px;padding:.6rem 1.2rem;color:#fff;font-weight:600;cursor:pointer;">
             Send feedback

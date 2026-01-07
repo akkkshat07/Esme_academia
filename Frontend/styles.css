@@ -123,8 +123,23 @@ form input[type="text"], form input[type="password"] {
 
 /* Main content */
 .dashboard-content { padding: 1.5rem clamp(1rem, 2.5vw, 2rem); }
-.dashboard-header h1 { margin: 0 0 .25rem 0; font-size: clamp(22px, 3vw, 30px); }
-.dashboard-header p  { margin: 0 0 1rem 0; color: var(--muted); }
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  margin-bottom: 1rem;
+}
+.header-left { flex: 1; }
+.header-left h1 { margin: 0 0 .25rem 0; font-size: clamp(22px, 3vw, 30px); }
+.header-left p  { margin: 0 0 1rem 0; color: var(--muted); }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
 /* Sticky search on mobile */
 .search-row { position: sticky; top: 66px; background: var(--bg); padding: .5rem 0; z-index: 40; }
