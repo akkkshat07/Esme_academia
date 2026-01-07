@@ -141,8 +141,8 @@ form input[type="text"], form input[type="password"] {
   justify-content: flex-end;
 }
 
-/* Sticky search on mobile */
-.search-row { position: sticky; top: 66px; background: var(--bg); padding: .5rem 0; z-index: 40; }
+/* Search row (non-sticky) */
+.search-row { padding: .5rem 0; margin-bottom: 0.5rem; }
 .dashboard-search {
   width: 100%; padding: .9rem 1rem; border-radius: 12px;
   border: 1px solid var(--border); background: #fff; font-size: 15px;
