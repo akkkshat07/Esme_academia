@@ -1,0 +1,36 @@
+# Environment variables (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Private keys
+private_key.pem
+firebase-admin.json
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+logs/
+server.log
+frontend.log
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+.backend.pid
+.frontend.pid

@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Admin – Upload & Manage Courses</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="stylesheet" href="admin.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Admin Portal</h1>
+  </header>
+
+  <main class="container">
+    <!-- Courses list -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Courses</h2>
+        <button id="refresh-courses" class="btn">Refresh</button>
+      </div>
+      <div id="courses" class="courses-list">Click “Refresh” to load courses.</div>
+    </section>
+
+    <!-- Add course -->
+    <section class="card">
+      <h2>Add Course</h2>
+      <form id="upload-form" class="grid">
+        <label>
+          Main Category
+          <input name="mainCategory" placeholder="e.g., Sales" required />
+        </label>
+        <label>
+          Subcategory
+          <input name="subcategory" placeholder="e.g., NE - Natures Essence" required />
+        </label>
+        <label>
+          Topic
+          <input name="topic" placeholder="e.g., Bleach" />
+        </label>
+        <label class="col-2">
+          Title
+          <input name="title" placeholder="Course title" required />
+        </label>
+        <label class="col-2">
+          Description
+          <textarea name="description" placeholder="One-line description"></textarea>
+        </label>
+
+        <label>
+          Type
+          <select name="type" id="ctype">
+            <option value="video" selected>video (.mp4)</option>
+            <option value="pdf">pdf (.pdf)</option>
+            <option value="html">html (single file)</option>
+            <label class="col-2">
+  Folder Path (optional)
+  <input name="folderPath" placeholder="e.g., Sales/NE-PRO/Bleach" />
+</label>
+          </select>
+        </label>
+        <label>
+          File
+          <input type="file" id="file" name="file" accept="video/mp4" required />
+        </label>
+        <label>
+          Duration (sec, video only)
+          <input name="duration_seconds" type="number" min="0" placeholder="e.g., 300" />
+        </label>
+        <label class="col-2">
+          Thumbnail URL (optional)
+          <input name="thumbnailUrl" placeholder="https://... (optional card image later)"/>
+        </label>
+
+        <div class="col-2">
+          <button class="btn primary" type="submit">Upload & Add to Sheet</button>
+        </div>
+      </form>
+
+      <pre id="upload-out" class="out"></pre>
+    </section>
+
+    <!-- Assignments -->
+    <section class="card">
+      <h2>Assign Course</h2>
+      <form id="assign-form" class="grid">
+        <label>
+          Employee Email
+          <input name="email" type="email" placeholder="user@company.com" required />
+        </label>
+        <label>
+          Course Title
+          <input name="title" placeholder="Exact Course Title" required />
+        </label>
+        <label>
+          Main Category
+          <input name="mainCategory" placeholder="(optional)" />
+        </label>
+        <label>
+          Subcategory
+          <input name="subcategory" placeholder="(optional)" />
+        </label>
+        <label>
+          Due Date (YYYY-MM-DD)
+          <input name="due_date" placeholder="2025-09-30" />
+        </label>
+        <label>
+          Assigned By
+          <input name="assigned_by" placeholder="manager@company.com" />
+        </label>
+        <div class="col-2">
+          <button class="btn primary" type="submit">Assign</button>
+        </div>
+      </form>
+      <pre id="assign-out" class="out"></pre>
+    </section>
+
+    <!-- Nudges -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Reminders / Nudges</h2>
+        <button id="run-reminders" class="btn">Send Nudges Now</button>
+      </div>
+      <pre id="rem-out" class="out"></pre>
+    </section>
+  </main>
+
+  <script src="admin.js"></script>
+</body>
+</html>

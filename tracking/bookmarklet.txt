@@ -1,0 +1,1 @@
+javascript:(function(){var s=document.createElement('script');s.src='http://localhost:3002/tracking/tracking.js';document.body.appendChild(s);})();

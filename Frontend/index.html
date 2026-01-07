@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Esme Learning – Sign in</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body class="login-page">
+  <!-- Decorative skincare / product bubbles -->
+  <div class="login-product-layer" aria-hidden="true">
+    <div class="product-orb orb-1"></div>
+    <div class="product-orb orb-2"></div>
+    <div class="product-orb orb-3"></div>
+    <div class="product-orb orb-4"></div>
+  </div>
+
+  <!-- Floating buzz words -->
+  <div class="floating-words" aria-hidden="true">
+    <span>Learning</span>
+    <span>Growth</span>
+    <span>Sales</span>
+    <span>Coaching</span>
+    <span>Performance</span>
+    <span>Success</span>
+  </div>
+
+  <main class="login-shell">
+    <section class="login-panel" role="main">
+      <div class="login-brand-block">
+        <!-- BIG logo: make sure img/esme.jpg exists -->
+        <img src="img/esme.jpg" alt="ESME" class="login-logo" />
+        <div class="login-brand-name">Esme Learning Academy</div>
+      </div>
+
+      <h1 class="login-heading">Welcome back</h1>
+      <p class="login-subtext">Use your email or phone + password.</p>
+
+      <form id="loginForm" class="login-form" novalidate>
+        <label for="emailOrPhone" class="login-label">Email or Phone</label>
+        <input
+          id="emailOrPhone"
+          type="text"
+          inputmode="email"
+          autocomplete="username"
+          placeholder="name@company.com or 98765 43210"
+          required
+          class="login-input"
+        />
+
+        <label for="password" class="login-label">Password</label>
+        <input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="••••••••"
+          required
+          class="login-input"
+        />
+
+        <button type="submit" class="login-btn">Sign in</button>
+
+        <div id="loginError" class="login-error" aria-live="polite"></div>
+      </form>
+
+      <p class="login-footer">
+        Trouble signing in? Contact HR/L&amp;D.
+      </p>
+    </section>
+  </main>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
