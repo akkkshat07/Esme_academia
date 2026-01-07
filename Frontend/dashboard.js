@@ -59,7 +59,7 @@
 
   function buildPlayerUrl(course) {
     const catLabel = course.mainCategory
-      ? (course.subcategory ? `${course.mainCategory} � ${course.subcategory}` : course.mainCategory)
+      ? (course.subcategory ? `${course.mainCategory} - ${course.subcategory}` : course.mainCategory)
       : '';
     const params = new URLSearchParams({
       title: course.title || '',
@@ -119,9 +119,9 @@
 
   function courseCard(course, opts = {}) {
     const thumb = course.thumbnailUrl || 'img/placeholder.jpg';
-    const dur   = course.duration_seconds ? ` � ${Math.round(course.duration_seconds / 60)} min` : '';
+    const dur   = course.duration_seconds ? ` - ${Math.round(course.duration_seconds / 60)} min` : '';
     const catLabel = course.mainCategory
-      ? (course.subcategory ? `${course.mainCategory} � ${course.subcategory}` : course.mainCategory)
+      ? (course.subcategory ? `${course.mainCategory} - ${course.subcategory}` : course.mainCategory)
       : '';
     const href  = buildPlayerUrl(course);
     const downloadLabel = course.downloadAllowed ? 'Download: Yes' : 'Download: No';
