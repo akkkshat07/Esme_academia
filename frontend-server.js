@@ -15,6 +15,7 @@ const FRONTEND_DIR = path.join(__dirname, 'Frontend');
 const PORT = 3000;
 const API_HOST = 'localhost';
 const API_PORT = 3001;
+const AI_PORT = 3002;
 
 // MIME types
 const mimeTypes = {
@@ -67,6 +68,34 @@ const server = http.createServer((req, res) => {
 
     // Pipe request body to API
     req.pipe(apiReq);
+    return;
+  }
+
+  // Proxy AI requests to Admin/AI server
+  if (pathname.startsWith('/ai/')) {
+    const aiPath = pathname + (parsedUrl.search || '');
+    const aiOptions = {
+      hostname: API_HOST,
+      port: AI_PORT,
+      path: aiPath,
+      method: req.method,
+      headers: req.headers
+    };
+
+    delete aiOptions.headers.host;
+
+    const aiReq = http.request(aiOptions, (aiRes) => {
+      res.writeHead(aiRes.statusCode, aiRes.headers);
+      apiRes.pipe(res);
+    });
+
+    aiReq.on('error', (err) => {
+      console.error('AI proxy error:', err);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, message: 'AI Service Unavailable' }));
+    });
+
+    req.pipe(aiReq);
     return;
   }
 

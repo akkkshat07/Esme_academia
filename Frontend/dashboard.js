@@ -22,10 +22,11 @@
   const aiChatForm     = $('#ai-chat-form');
   const aiChatInput    = $('#ai-chat-input');
   const aiChatMessages = $('#ai-chat-messages');
-  const AI_API_URL     = 'http://localhost:3002/ai/chat';
-  const AI_HISTORY_URL  = 'http://localhost:3002/ai/history';
-  const AI_SESSION_LIST_URL = 'http://localhost:3002/ai/sessions';
-  const AI_CREATE_SESSION_URL = 'http://localhost:3002/ai/session';
+  // AI APIs are proxied via /ai/... by the frontend server
+  const AI_API_URL     = '/ai/chat';
+  const AI_HISTORY_URL  = '/ai/history';
+  const AI_SESSION_LIST_URL = '/ai/sessions';
+  const AI_CREATE_SESSION_URL = '/ai/session';
 
   const sidebar    = $('#sidebar');
   const backdrop   = $('#sidebar-backdrop');
@@ -756,7 +757,7 @@
      if (!confirm('Are you sure you want to delete this chat?')) return;
      
      try {
-         const resp = await fetch(`http://localhost:3002/ai/session/${encodeURIComponent(id)}`, {
+         const resp = await fetch(`/ai/session/${encodeURIComponent(id)}`, {
              method: 'DELETE',
              headers: { 'Content-Type': 'application/json' }
          });
