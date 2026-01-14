@@ -1,6 +1,26 @@
 const API = 'http://localhost:3002';
 
-// Change file accept based on "type"
+(function() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user || !user.email || (user.role || '').toLowerCase() !== 'admin') {
+      alert('Access Denied: Admin access only');
+      window.location.href = '/';
+      return;
+    }
+  } catch (e) {
+    alert('Access Denied: Invalid session');
+    window.location.href = '/';
+    return;
+  }
+})();
+
+document.getElementById('logout-admin-btn')?.addEventListener('click', () => {
+  localStorage.removeItem('user');
+  localStorage.removeItem('activeTab');
+  window.location.href = '/';
+});
+
 const ctype = document.getElementById('ctype');
 const file = document.getElementById('file');
 function setAccept() {
@@ -12,7 +32,6 @@ function setAccept() {
 }
 ctype.onchange = setAccept; setAccept();
 
-// Refresh courses
 document.getElementById('refresh-courses').onclick = async () => {
   try {
     const r = await fetch(`${API}/admin/courses`);
@@ -28,7 +47,6 @@ document.getElementById('refresh-courses').onclick = async () => {
   }
 };
 
-// Add course (upload + append to sheet)
 document.getElementById('upload-form').onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -42,7 +60,6 @@ document.getElementById('upload-form').onsubmit = async (e) => {
   }
 };
 
-// Assign course
 document.getElementById('assign-form').onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
@@ -60,7 +77,6 @@ document.getElementById('assign-form').onsubmit = async (e) => {
   }
 };
 
-// Run reminders/nudges
 document.getElementById('run-reminders').onclick = async () => {
   try {
     const r = await fetch(`${API}/admin/reminders/run`, { method:'POST' });
@@ -72,7 +88,6 @@ document.getElementById('run-reminders').onclick = async () => {
   }
 };
 
-// util
 function escapeHtml(s='') {
   return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }

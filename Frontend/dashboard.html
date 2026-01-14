@@ -1,19 +1,14 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="u      <div class="search-row">
-        <input id=          <textarea id="feedback-text"
-                    rows="5"
-                    style="width:100%;padding:.8rem;border-radius:8px;border:1px solid #d9e1e7;font-family:inherit;font-size:14px;"
-                    placeholder="Write your feedback here..."></textarea>rch-input" class="dashboard-search" placeholder="Search for courses..." />
-      </div>8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>ESME Learning - Dashboard</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body class="dashboard-bg">
 
-  <!-- Mobile top bar -->
   <header class="topbar">
     <button id="menu-toggle" class="icon-btn" aria-label="Toggle menu">&#9776;</button>
     <div class="brand">
@@ -22,11 +17,9 @@
     </div>
   </header>
 
-  <!-- Backdrop for slide-in sidebar on mobile -->
   <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
   <div class="dashboard-wrapper">
-    <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <img src="img/esme.jpg" alt="ESME" class="sidebar-logo">
@@ -34,8 +27,9 @@
       </div>
       <nav class="sidebar-nav">
         <ul>
-          <li id="tab-all" class="active">All Courses</li>
-          <li id="tab-assigned">Assigned Courses</li>
+          <li id="tab-all">All Courses</li>
+          <li id="tab-assigned" class="active">Assigned Courses</li>
+          <li id="tab-ai-mentor">Esme AI Mentor</li>
           <li id="tab-quizzes">Quizzes</li>
           <li id="tab-leaderboard">Leaderboard</li>
           <li id="tab-feedback">Feedback</li>
@@ -44,41 +38,56 @@
       </nav>
     </aside>
 
-    <!-- Main content -->
     <main class="dashboard-content">
-      <header class="dashboard-header">
-        <div class="header-left">
-          <h1>Welcome, <span id="user-name">User</span>!</h1>
-          <p>Pick a category or search any topic.</p>
+      <section id="panel-all" class="panel">
+        <header class="dashboard-header">
+          <div class="header-left">
+            <h1>All Courses</h1>
+            <p>Browse all available courses in our catalog.</p>
+          </div>
+          <div class="header-right">
+            <label for="language-filter-all" class="language-filter-label">
+              Language:
+              <select id="language-filter-all" class="language-select">
+                <option value="">All Languages</option>
+              </select>
+            </label>
+          </div>
+        </header>
+
+        <div class="search-row">
+          <input id="search-input-all" class="dashboard-search" placeholder="Search all courses..." />
         </div>
-        <div class="header-right">
-          <label for="language-filter" class="language-filter-label">
-            Language:
-            <select id="language-filter" class="language-select">
-              <option value="">All Languages</option>
-            </select>
-          </label>
+
+        <div id="category-chips" class="chips chips--wrap">
         </div>
-      </header>
+        <div id="subcategory-bar" class="chips chips--wrap hidden">
+        </div>
 
-      <div class="search-row">
-        <input id="search-input" class="dashboard-search" placeholder="Search for courses�" />
-      </div>
-
-      <!-- Category chips -->
-      <div id="category-chips" class="chips chips--wrap"></div>
-      <!-- Subcategory chips (optional) -->
-      <div id="subcategory-bar" class="chips chips--wrap"></div>
-
-      <!-- === Panels === -->
-      <!-- All Courses -->
-      <section id="panel-all" class="panel panel--active">
-        <div id="courses-area" class="courses-grid"></div>
+        <p id="all-summary" style="color:#5b6b7b;margin-top:0.25rem;"></p>
+        <div id="all-area" class="courses-grid"></div>
       </section>
 
-      <!-- Assigned Courses -->
-      <section id="panel-assigned" class="panel hidden">
-        <h2>Assigned Courses</h2>
+      <section id="panel-assigned" class="panel panel--active">
+        <header class="dashboard-header">
+          <div class="header-left">
+            <h1>Welcome, <span id="user-name">User</span>!</h1>
+            <p>Here are your assigned courses.</p>
+          </div>
+          <div class="header-right">
+            <label for="language-filter" class="language-filter-label">
+              Language:
+              <select id="language-filter" class="language-select">
+                <option value="">All Languages</option>
+              </select>
+            </label>
+          </div>
+        </header>
+
+        <div class="search-row">
+          <input id="search-input-assigned" class="dashboard-search" placeholder="Search your assigned courses..." />
+        </div>
+
         <p id="assigned-summary" style="color:#5b6b7b;margin-top:0.25rem;"></p>
         <div id="assigned-area" class="courses-grid"></div>
       </section>
@@ -87,12 +96,11 @@
       <section id="panel-quizzes" class="panel hidden">
         <h2>Quizzes</h2>
         <p style="color:#5b6b7b;margin-top:0.25rem;">
-          Take quizzes assigned to you. Some might be general quizzes available to everyone.
+          Take quizzes explicitly assigned to you by the administrator.
         </p>
         <div id="quizzes-area" class="courses-grid"></div>
       </section>
 
-      <!-- Leaderboard -->
       <section id="panel-leaderboard" class="panel hidden">
         <h2>Leaderboard</h2>
         <p style="color:#5b6b7b;margin-top:0.25rem;">
@@ -101,7 +109,47 @@
         <div id="leaderboard-area"></div>
       </section>
 
-      <!-- Feedback -->
+      <section id="panel-ai-mentor" class="panel hidden">
+        <div class="ai-layout">
+           <main class="ai-main-area">
+              <header class="dashboard-header" style="margin-bottom: 0.5rem; justify-content: flex-start; gap: 1rem;">
+                <div class="header-left">
+                  <h1>Esme AI Mentor</h1>
+                </div>
+              </header>
+      
+              <div class="ai-chat-container">
+                <div id="ai-chat-messages">
+                </div>
+                
+                <div class="ai-chat-form-container">
+                  <form id="ai-chat-form">
+                    <button type="button" id="ai-mic-btn" class="ai-mic-btn" title="Voice Typing">
+                      <svg viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="currentColor" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path fill="currentColor" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                      </svg>
+                    </button>
+                    <input type="text" id="ai-chat-input" 
+                           placeholder="Ask me anything..." 
+                           autocomplete="off">
+                    <button type="submit" class="ai-send-btn">Send</button>
+                  </form>
+                </div>
+              </div>
+           </main>
+
+           <aside class="ai-history-sidebar">
+             <div class="ai-history-header">
+               <h3>Chats</h3>
+               <button id="ai-new-chat-btn" class="ai-new-chat-btn" title="New Chat">+</button>
+             </div>
+             <div id="ai-history-list" class="ai-history-list">
+             </div>
+           </aside>
+        </div>
+      </section>
+
       <section id="panel-feedback" class="panel hidden">
         <h2>Share your feedback</h2>
         <p style="color:#5b6b7b;margin-top:0.25rem;">
@@ -122,6 +170,6 @@
     </main>
   </div>
 
-  <script src="dashboard.js?v=5" defer></script>
+  <script src="dashboard.js?v=9" defer></script>
 </body>
 </html>

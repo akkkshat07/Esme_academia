@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { google } = require('googleapis');
+const twilio = require('twilio');
 
 const app = express();
 app.set('trust proxy', true);
@@ -119,14 +120,343 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// ========== PHONE LOGIN WITH OTP ==========
+app.post('/api/login-phone', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    if (!phone) {
+      return res.status(400).json({ ok: false, message: 'Missing phone number' });
+    }
+
+    const sheets = await sheetsClient();
+    const rsp = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SHEET_ID,
+      range: 'Sheet1!A2:K'
+    });
+
+    const rows = rsp.data.values || [];
+    const normalizedPhone = normPhone(phone);
+
+    const user = rows.find((r) => {
+      const empid = (r[0] || '').trim();
+      const userPhone = normPhone(r[1] || '');
+      const name = (r[2] || '').trim();
+      const email = (r[3] || '').trim().toLowerCase();
+      const role = (r[4] || '').trim().toLowerCase();
+
+      // Relaxed phone check: if the sheet phone ends with 'phone' or 'phone' ends with sheet phone
+      // Because input might be +91... and sheet might be 91... or just 10 digits
+      if (userPhone && normalizedPhone && (userPhone.endsWith(normalizedPhone) || normalizedPhone.endsWith(userPhone))) {
+        r._parsed = { empid, phone: userPhone, name, email, role };
+        return true;
+      }
+      return false;
+    });
+
+    if (!user || !user._parsed) {
+      return res.status(401).json({ ok: false, message: 'User not found' });
+    }
+
+    res.json({
+      ok: true,
+      user: {
+        empid: user._parsed.empid,
+        name: user._parsed.name,
+        email: user._parsed.email,
+        phone: user._parsed.phone,
+        role: user._parsed.role
+      }
+    });
+  } catch (err) {
+    console.error('POST /api/login-phone error:', err);
+    res.status(500).json({ ok: false, message: 'Phone login failed' });
+  }
+});
+
+// ========== EMAIL LOGIN WITH OTP ==========
+app.post('/api/login-email', async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ ok: false, message: 'Missing email' });
+    }
+
+    const sheets = await sheetsClient();
+    const rsp = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SHEET_ID,
+      range: 'Sheet1!A2:K'
+    });
+
+    const rows = rsp.data.values || [];
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const user = rows.find((r) => {
+      const empid = (r[0] || '').trim();
+      const phone = normPhone(r[1] || '');
+      const name = (r[2] || '').trim();
+      const userEmail = (r[3] || '').trim().toLowerCase();
+      const role = (r[4] || '').trim().toLowerCase();
+
+      if (userEmail && userEmail === normalizedEmail) {
+        r._parsed = { empid, phone, name, email: userEmail, role };
+        return true;
+      }
+      return false;
+    });
+
+    if (!user || !user._parsed) {
+      return res.status(401).json({ ok: false, message: 'User not found' });
+    }
+
+    res.json({
+      ok: true,
+      user: {
+        empid: user._parsed.empid,
+        name: user._parsed.name,
+        email: user._parsed.email,
+        phone: user._parsed.phone,
+        role: user._parsed.role
+      }
+    });
+  } catch (err) {
+    console.error('POST /api/login-email error:', err);
+    res.status(500).json({ ok: false, message: 'Email login failed' });
+  }
+});
+
+// ========== EMAIL OTP SYSTEM (Production Modular Setup) ==========
+const otpStore = {}; // Stores OTPs for email
+const phoneOtpStore = {}; // Stores OTPs for phone
+
+app.post('/api/send-email-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body || {};
+    if (!email || !otp) {
+      return res.status(400).json({ ok: false, message: 'Missing email or otp' });
+    }
+
+    // Store OTP with 10-minute expiry
+    otpStore[email] = {
+      otp: otp.toString(),
+      expiresAt: Date.now() + 10 * 60 * 1000
+    };
+
+    // Log to terminal for local simulation (Production would use an email service)
+    console.log(`\n---------------------------------`);
+    console.log(`[EMAIL VERIFICATION CODE] for ${email}: ${otp}`);
+    console.log(`---------------------------------\n`);
+
+    res.json({ ok: true, message: 'Email OTP simulated' });
+  } catch (err) {
+    console.error('POST /api/send-email-otp error:', err);
+    res.status(500).json({ ok: false, message: 'Failed to process email OTP' });
+  }
+});
+
+app.post('/api/verify-email-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body || {};
+    if (!otpStore[email]) {
+      return res.status(400).json({ ok: false, message: 'No verification record found' });
+    }
+
+    const record = otpStore[email];
+    if (Date.now() > record.expiresAt) {
+      delete otpStore[email];
+      return res.status(401).json({ ok: false, message: 'Code expired' });
+    }
+
+    if (record.otp !== otp.toString()) {
+      return res.status(401).json({ ok: false, message: 'Invalid verification code' });
+    }
+
+    delete otpStore[email];
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /api/verify-email-otp error:', err);
+    res.status(500).json({ ok: false, message: 'Verification failed' });
+  }
+});
+
+// ========== SMS SETUP (Fast2SMS / DLT) ==========
+// Note: Requires FAST2SMS_API_KEY in .env
+
+async function sendFast2SMS(phone, otp) {
+    const apiKey = process.env.FAST2SMS_API_KEY;
+    if (!apiKey) {
+      console.error('[SMS] FAST2SMS_API_KEY is missing in .env');
+      return false;
+    }
+
+    // Official Fast2SMS Bulk V2 API
+    const url = 'https://www.fast2sms.com/dev/bulkV2';
+    
+    // Using 'otp' route (Quick Send) which is standard for OTPs
+    const params = new URLSearchParams();
+    params.append('authorization', apiKey);
+    params.append('route', 'otp');
+    params.append('variables_values', otp);
+    params.append('flash', '0');
+    params.append('numbers', phone.replace(/[^\d]/g, '')); // only digits
+
+    try {
+      console.log(`[Fast2SMS] Sending OTP to ${phone}...`);
+      const response = await fetch(`${url}?${params.toString()}`, { method: 'GET' });
+      const data = await response.json();
+      console.log('[Fast2SMS] Response:', data);
+      return data.return === true;
+    } catch (err) {
+      console.error('[Fast2SMS] Failed:', err);
+      return false;
+    }
+}
+
+// ========== MSG91 SMS SETUP (Recommended API Method) ==========
+// Docs: https://docs.msg91.com/p/tf9Ght1u9a/c/BvIAdk1u2s/SEND-OTP-SMS
+
+// const msg91 = require("msg91").default; // Deprecated in favor of fetch for debugging
+// let isMsg91Initialized = false;
+
+async function sendMsg91(phone, otp) {
+    const authKey = process.env.MSG91_AUTH_KEY;
+    const templateId = process.env.MSG91_TEMPLATE_ID;
+
+    if (!authKey || !templateId) {
+        console.error('[MSG91] Error: MSG91_AUTH_KEY or MSG91_TEMPLATE_ID missing in .env');
+        return false;
+    }
+
+    // Ensure phone number starts with 91 for India
+    let cleanPhone = phone.toString().replace(/\D/g, '');
+    if (!cleanPhone.startsWith('91') && cleanPhone.length === 10) {
+        cleanPhone = '91' + cleanPhone;
+    }
+
+    try {
+        console.log(`[MSG91] Sending OTP to: ${cleanPhone}`);
+        console.log(`[MSG91] Template ID: ${templateId}`);
+        
+        // Use MSG91 Flow API (correct endpoint per MSG91 support)
+        const url = `https://control.msg91.com/api/v5/flow?authkey=${authKey.trim()}&accept=application/json&content-type=application/json`;
+        
+        const payload = {
+            template_id: templateId.trim(),
+            recipients: [
+                {
+                    mobiles: cleanPhone,
+                    var1: otp
+                }
+            ]
+        };
+
+        console.log('[MSG91] Request URL:', url);
+        console.log('[MSG91] Request Body:', JSON.stringify(payload, null, 2));
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const textResponse = await response.text();
+        console.log('[MSG91] Response:', textResponse);
+        
+        let data;
+        try {
+            data = JSON.parse(textResponse);
+        } catch (e) {
+            data = { type: 'unknown', message: textResponse };
+        }
+
+        // Check for success indicators
+        if (data.type === 'success' || data.success === true || (data.message && data.message.includes('success'))) {
+            console.log(`[MSG91] ✓ OTP sent to ${cleanPhone}`);
+            return true;
+        } else if (response.ok) {
+            // If HTTP 200 but not explicit success, still consider it sent
+            console.log(`[MSG91] ✓ OTP sent to ${cleanPhone} (HTTP ${response.status})`);
+            return true;
+        } else {
+            console.error('[MSG91] Error:', data);
+            return false;
+        }
+    } catch (err) {
+        console.error('[MSG91] Handler Error:', err);
+        return false;
+    }
+}
+
+// ========== PHONE OTP ROUTES ==========
+
+app.post('/api/send-phone-otp', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    if (!phone) {
+      return res.status(400).json({ ok: false, message: 'Missing phone number' });
+    }
+
+    const normalizedPhone = phone.startsWith('+') ? phone : '+' + phone;
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store OTP in memory (10 min expiry)
+    phoneOtpStore[normalizedPhone] = {
+      otp: otp,
+      expiresAt: Date.now() + 10 * 60 * 1000
+    };
+
+    // Send via MSG91
+    await sendMsg91(normalizedPhone, otp);
+    
+    res.json({ ok: true, message: 'OTP sent via MSG91' });
+  } catch (err) {
+    console.error('POST /api/send-phone-otp error:', err);
+    res.status(500).json({ ok: false, message: 'Failed to send OTP' });
+  }
+});
+
+app.post('/api/verify-phone-otp', async (req, res) => {
+  try {
+    const { phone, otp } = req.body || {};
+    if (!phone || !otp) {
+      return res.status(400).json({ ok: false, message: 'Missing phone or otp' });
+    }
+    
+    const normalizedPhone = phone.startsWith('+') ? phone : '+' + phone;
+    const record = phoneOtpStore[normalizedPhone];
+
+    if (!record) {
+      return res.status(400).json({ ok: false, message: 'No verification record found' }); // Or expired/never sent
+    }
+
+    if (Date.now() > record.expiresAt) {
+      delete phoneOtpStore[normalizedPhone];
+      return res.status(401).json({ ok: false, message: 'Code expired' });
+    }
+
+    if (record.otp !== otp.toString()) {
+      return res.status(401).json({ ok: false, message: 'Invalid verification code' });
+    }
+
+    // Success
+    delete phoneOtpStore[normalizedPhone];
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /api/verify-phone-otp error:', err);
+    res.status(500).json({ ok: false, message: 'Verification failed' });
+  }
+});
+
 // Helper to detect language from content text
 function detectLanguage(row) {
   // Row indices: 1=Subcategory, 2=Topic, 3=Title
   const text = ((row[1] || '') + ' ' + (row[2] || '') + ' ' + (row[3] || '')).toLowerCase();
   
-  // Check for 'hindi' word boundary or explicit suffix
-  if (text.includes('hindi')) {
-    return 'Hindi';
+  // Check for specific languages
+  const languages = ['Hindi', 'Tamil', 'Telugu', 'Malayalam', 'Kannada', 'Marathi'];
+  for (const lang of languages) {
+    if (text.includes(lang.toLowerCase())) {
+      return lang;
+    }
   }
   return 'English';
 }
@@ -434,7 +764,7 @@ app.post('/api/feedback', async (req, res) => {
       valueInputOption: 'RAW',
       requestBody: {
         values: [[
-          new Date().toLocaleString(),
+          new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
           String(email).trim(),
           String(name || '').trim(),
           String(message).trim()
@@ -568,29 +898,32 @@ app.post('/api/track', async (req, res) => {
     percent_watched = Number(percent_watched || 0);
     autoCompleted = String(autoCompleted || '').toUpperCase();
     status = String(status || 'Manual').trim();
-    last_seen_at = String(last_seen_at || new Date().toISOString());
+    last_seen_at = String(last_seen_at || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }));
 
     if (!email || !title) {
       return res.status(400).json({ ok: false, message: 'Missing email/title' });
     }
 
-    const isCompleted =
-      autoCompleted === 'TRUE' ||
-      percent_watched >= 95 ||
-      status.toLowerCase() === 'completed';
+    // Simplified Completion Logic (User Requirement: 100% threshold, skip everything else)
+    const isCompleted = percent_watched >= 100;
 
-    if (isCompleted) {
-      autoCompleted = 'TRUE';
-      status = 'Completed';
-      percent_watched = 100;
-    } else if (autoCompleted === 'AUTO') {
-      autoCompleted = '';
+    if (!isCompleted) {
+      // User requested to not update anything if criteria not met
+      return res.json({ ok: true, message: 'Not yet at 100% completion threshold. Record skipped.', completed: false });
     }
+
+    // If we reached here, it is >= 65%
+    const finalStatus = 'Completed';
+    const finalPercent = percent_watched;
+    autoCompleted = 'TRUE';
 
     const key = `${email}|${title}`;
     const now = Date.now();
     const last = lastWrite.get(key) || 0;
-    if (!isCompleted && now - last < MIN_WRITE_MS) {
+    
+    // For completed records, we might still want to throttle if the same video ends multiple times 
+    // but usually, once it's completed, we can write it.
+    if (now - last < MIN_WRITE_MS) {
       return res.json({ ok: true, throttled: true });
     }
     lastWrite.set(key, now);
@@ -603,22 +936,22 @@ app.post('/api/track', async (req, res) => {
       requestBody: {
         values: [
           [
-            new Date().toLocaleString(), // A Timestamp
+            new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }), // A Timestamp (IST)
             email, // B Email
             title, // C Course Title
             category, // D Category
             Number.isFinite(watchedSeconds) ? watchedSeconds : 0, // E Watched Seconds
             autoCompleted || '', // F Auto Completed
-            status || 'Manual', // G status
+            finalStatus, // G status
             Number.isFinite(last_position_s) ? last_position_s : '', // H last_position_s
-            Number.isFinite(percent_watched) ? percent_watched : '', // I percent_watched
+            finalPercent, // I percent_watched
             last_seen_at // J last_seen_at
           ]
         ]
       }
     });
 
-    res.json({ ok: true, completed: isCompleted });
+    res.json({ ok: true, completed: true });
   } catch (e) {
     console.error('POST /api/track error:', e);
     res.status(500).json({ ok: false, message: 'Failed to write completion' });

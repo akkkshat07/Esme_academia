@@ -1,4 +1,3 @@
-// assigned.js — shows only user-assigned courses
 (() => {
   'use strict';
   const $ = (s) => document.querySelector(s);
@@ -31,12 +30,12 @@
           <article class="course-card">
             <img src="${thumb}" class="course-thumb" alt="">
             <div class="course-meta">
-              <div class="course-kicker">${c.mainCategory} ${c.subcategory ? ' • ' + c.subcategory : ''}</div>
+              <div class="course-kicker">${c.mainCategory} ${c.subcategory ? ' - ' + c.subcategory : ''}</div>
               <h3 class="course-title">${c.title}</h3>
               <p class="course-desc">${c.description || ''}</p>
               <div class="course-actions">
                 <a href="${openUrl}" class="btn btn--primary">Open</a>
-                <span class="course-type">video ${allowDl ? ' • Download: Yes' : ''}</span>
+                <span class="course-type">video ${allowDl ? ' - Download: Yes' : ''}</span>
               </div>
             </div>
           </article>`;

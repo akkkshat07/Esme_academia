@@ -1,4 +1,3 @@
-// DOM Elements
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
 const loginSection = document.getElementById("login-section");
@@ -6,7 +5,6 @@ const dashboard = document.getElementById("dashboard");
 const categories = document.querySelectorAll(".category");
 const videosSection = document.getElementById("videos-section");
 
-// Handle Login
 loginForm.addEventListener("submit", async function (e) {
   e.preventDefault();
 
@@ -23,7 +21,6 @@ loginForm.addEventListener("submit", async function (e) {
     const result = await response.json();
 
     if (response.ok && result.success) {
-      // Show dashboard
       loginSection.classList.add("hidden");
       dashboard.classList.remove("hidden");
       loginError.textContent = "";
@@ -36,7 +33,6 @@ loginForm.addEventListener("submit", async function (e) {
   }
 });
 
-// Dummy video data for categories
 const videoData = {
   "BH": [
     {
@@ -80,7 +76,6 @@ const videoData = {
   ]
 };
 
-// Load videos when category is clicked
 categories.forEach(cat => {
   cat.addEventListener("click", () => {
     const key = cat.dataset.cat;
@@ -99,7 +94,5 @@ categories.forEach(cat => {
       `;
       videosSection.appendChild(card);
     });
-
-    videosSection.classList.remove("hidden");
   });
 });

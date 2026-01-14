@@ -18,16 +18,21 @@ const API_PORT = 3001;
 
 // MIME types
 const mimeTypes = {
-  '.html': 'text/html',
-  '.css': 'text/css',
-  '.js': 'application/javascript',
-  '.json': 'application/json',
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav'
 };
 
 const server = http.createServer((req, res) => {
@@ -71,13 +76,21 @@ const server = http.createServer((req, res) => {
   }
 
   // Build file path
-  let filePath = path.join(FRONTEND_DIR, pathname);
-
-  // Prevent directory traversal
-  if (!filePath.startsWith(FRONTEND_DIR)) {
-    res.writeHead(403, { 'Content-Type': 'text/plain' });
-    res.end('Forbidden');
-    return;
+  let filePath;
+  
+  // Serve special folders which sit in the root
+  if (pathname.startsWith('/ai-portal/') || pathname.startsWith('/admin-portal/')) {
+    filePath = path.join(__dirname, pathname);
+  } else {
+    // Normal frontend files
+    filePath = path.join(FRONTEND_DIR, pathname);
+  
+    // Prevent directory traversal
+    if (!filePath.startsWith(FRONTEND_DIR)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
   }
 
   // Check if file exists
@@ -118,39 +131,75 @@ const server = http.createServer((req, res) => {
     if (stats.isDirectory()) {
       // Try index.html in directory
       filePath = path.join(filePath, 'index.html');
-      fs.readFile(filePath, (err, content) => {
+      fs.stat(filePath, (err, indexStats) => {
         if (err) {
           res.writeHead(404, { 'Content-Type': 'text/plain' });
           res.end('404 Not Found');
           return;
         }
-        const ext = path.extname(filePath);
-        const contentType = mimeTypes[ext] || 'text/html';
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(content);
+        serveFile(req, res, filePath, indexStats);
       });
       return;
     }
 
-    // Read and serve file
-    fs.readFile(filePath, (err, content) => {
-      if (err) {
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Internal Server Error');
-        return;
-      }
-
-      const ext = path.extname(filePath);
-      const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-      res.writeHead(200, {
-        'Content-Type': contentType,
-        'Cache-Control': 'no-cache'
-      });
-      res.end(content);
-    });
+    // Serve file with Range support (streaming)
+    serveFile(req, res, filePath, stats);
   });
 });
+
+function serveFile(req, res, filePath, stats) {
+  const ext = path.extname(filePath);
+  const contentType = mimeTypes[ext] || 'application/octet-stream';
+  const fileSize = stats.size;
+  const range = req.headers.range;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    
+    // Chunk size of 1MB (1024 * 1024)
+    const MAX_CHUNK_SIZE = 1 * 1024 * 1024; 
+    
+    let end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    let chunksize = (end - start) + 1;
+    
+    // Enforce max chunk size to prevent buffering entire file at once
+    if (chunksize > MAX_CHUNK_SIZE) {
+        end = start + MAX_CHUNK_SIZE - 1;
+        if (end >= fileSize) {
+            end = fileSize - 1;
+        }
+        chunksize = (end - start) + 1;
+    }
+
+    // Valid range check
+    if(start >= fileSize || end >= fileSize) {
+       res.writeHead(416, {
+        "Content-Range": `bytes */${fileSize}`,
+        "Content-Type": contentType
+       });
+       res.end();
+       return;
+    }
+
+    const file = fs.createReadStream(filePath, { start, end });
+    const head = {
+      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': contentType,
+    };
+    res.writeHead(206, head);
+    file.pipe(res);
+  } else {
+    const head = {
+      'Content-Length': fileSize,
+      'Content-Type': contentType,
+    };
+    res.writeHead(200, head);
+    fs.createReadStream(filePath).pipe(res);
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`\n✓ Frontend Server running on http://localhost:${PORT}`);

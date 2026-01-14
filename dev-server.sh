@@ -8,6 +8,7 @@ set -e
 PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 BACKEND_PID_FILE="$PROJECT_DIR/.backend.pid"
 FRONTEND_PID_FILE="$PROJECT_DIR/.frontend.pid"
+ADMIN_PID_FILE="$PROJECT_DIR/.admin.pid"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,15 +36,52 @@ start_backend() {
     sleep 2
     
     # Check if server is running
-    if curl -s http://localhost:3001/api/health > /dev/null; then
-        echo -e "${GREEN}✓ Backend running on http://localhost:3001${NC}"
+    # Try up to 5 times
+    for i in {1..5}; do
+        if curl -s http://localhost:3001/api/health > /dev/null; then
+            echo -e "${GREEN}✓ Backend running on http://localhost:3001${NC}"
+            return 0
+        fi
+        sleep 1
+    done
+    
+    echo -e "${RED}✗ Backend failed to start${NC}"
+    tail -20 server.log
+    return 1
+}
+
+# Function to start admin server
+start_admin() {
+    echo -e "${BLUE}Starting Admin/AI Server...${NC}"
+    
+    if [ -f "$ADMIN_PID_FILE" ]; then
+        OLD_PID=$(cat "$ADMIN_PID_FILE")
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            echo -e "${YELLOW}Admin server already running (PID: $OLD_PID)${NC}"
+            return 0
+        fi
+    fi
+    
+    cd "$PROJECT_DIR/admin-server"
+    # Ensure logs directory or write to main project log
+    npm start > "$PROJECT_DIR/admin.log" 2>&1 &
+    ADMIN_PID=$!
+    echo $ADMIN_PID > "$ADMIN_PID_FILE"
+    cd "$PROJECT_DIR"
+    
+    sleep 2
+    
+    # Check if server is running (port 3002)
+    if curl -s http://localhost:3002/health > /dev/null; then
+        echo -e "${GREEN}✓ Admin/AI running on http://localhost:3002${NC}"
         return 0
     else
-        echo -e "${RED}✗ Backend failed to start${NC}"
-        tail -20 server.log
+        echo -e "${RED}✗ Admin/AI failed to start${NC}"
+        tail -20 "$PROJECT_DIR/admin.log"
         return 1
     fi
 }
+
 
 # Function to start frontend
 start_frontend() {
@@ -87,6 +125,15 @@ stop_servers() {
         fi
         rm -f "$BACKEND_PID_FILE"
     fi
+
+    if [ -f "$ADMIN_PID_FILE" ]; then
+        ADMIN_PID=$(cat "$ADMIN_PID_FILE")
+        if kill -0 "$ADMIN_PID" 2>/dev/null; then
+            kill "$ADMIN_PID"
+            echo -e "${GREEN}✓ Admin/AI stopped (PID: $ADMIN_PID)${NC}"
+        fi
+        rm -f "$ADMIN_PID_FILE"
+    fi
     
     if [ -f "$FRONTEND_PID_FILE" ]; then
         FRONTEND_PID=$(cat "$FRONTEND_PID_FILE")
@@ -97,6 +144,7 @@ stop_servers() {
         rm -f "$FRONTEND_PID_FILE"
     fi
 }
+
 
 # Function to show status
 show_status() {
@@ -120,15 +168,25 @@ show_status() {
     else
         echo -e "${RED}✗ Not running${NC}"
     fi
+
+    echo ""
+    echo -e "${YELLOW}Admin/AI API:${NC}"
+    if curl -s http://localhost:3002/health > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ Running on http://localhost:3002${NC}"
+    else
+        echo -e "${RED}✗ Not running${NC}"
+    fi
     
     echo ""
     echo -e "${YELLOW}Logs:${NC}"
     [ -f server.log ] && echo "  Backend: $(tail -1 server.log)"
+    [ -f admin.log ] && echo "  Admin:   $(tail -1 admin.log)"
     [ -f frontend.log ] && echo "  Frontend: Last update $(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' frontend.log)"
     
     echo ""
     echo -e "${BLUE}═══════════════════════════════════════${NC}"
 }
+
 
 # Function to show logs
 show_logs() {
@@ -148,7 +206,7 @@ show_logs() {
 # Main script logic
 case "$1" in
     start)
-        start_backend && start_frontend
+        start_backend && start_admin && start_frontend
         show_status
         ;;
     stop)
@@ -157,7 +215,7 @@ case "$1" in
     restart)
         stop_servers
         sleep 1
-        start_backend && start_frontend
+        start_backend && start_admin && start_frontend
         show_status
         ;;
     status)

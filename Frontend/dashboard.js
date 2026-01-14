@@ -2,15 +2,14 @@
 (() => {
   'use strict';
 
-  // === DOM helpers ===
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
   const nameEl      = $('#user-name');
-  const searchEl    = $('#search-input');
+  const searchEl    = $('#search-input-all');
   const chipsEl     = $('#category-chips');
   const subBarEl    = $('#subcategory-bar');
-  const allAreaEl   = $('#courses-area');
+  const allAreaEl   = $('#all-area');
   const assignedEl  = $('#assigned-area');
   const quizzesEl   = $('#quizzes-area');
   const assignedSum = $('#assigned-summary');
@@ -18,31 +17,46 @@
   const feedbackForm = $('#feedback-form');
   const feedbackText = $('#feedback-text');
   const feedbackStatus = $('#feedback-status');
-  const languageFilter = $('#language-filter');
+  const languageFilter = $('#language-filter-all');
+
+  const aiChatForm     = $('#ai-chat-form');
+  const aiChatInput    = $('#ai-chat-input');
+  const aiChatMessages = $('#ai-chat-messages');
+  const AI_API_URL     = 'http://localhost:3002/ai/chat';
+  const AI_HISTORY_URL  = 'http://localhost:3002/ai/history';
+  const AI_SESSION_LIST_URL = 'http://localhost:3002/ai/sessions';
+  const AI_CREATE_SESSION_URL = 'http://localhost:3002/ai/session';
 
   const sidebar    = $('#sidebar');
   const backdrop   = $('#sidebar-backdrop');
   const menuToggle = $('#menu-toggle');
 
-  const tabAll        = $('#tab-all');
+  const tabAll        = $('#tab-all'); // May be null/hidden
   const tabAssigned   = $('#tab-assigned');
+  const tabAiMentor   = $('#tab-ai-mentor');
   const tabQuizzes    = $('#tab-quizzes');
   const tabLeader     = $('#tab-leaderboard');
   const tabFeedback   = $('#tab-feedback');
   const logoutBtn     = $('#logout-btn');
 
-  // === State ===
+  const aiNewChatBtn   = $('#ai-new-chat-btn');
+  const aiHistoryList  = $('#ai-history-list');
+
   let user = null;
   let userKey = ''; // email or phone
   let allCourses = [];
   let assignedCourses = [];
   let quizzes = [];
   let assignedQuizzes = [];
-  let currentTab = 'all';
+  let currentTab = localStorage.getItem('activeTab');
+  // If activeTab is not set, default to 'all'
+  if (!currentTab) {
+    currentTab = 'all';
+  }
   let availableLanguages = [];
-  let selectedLanguage = ''; // '' means all languages
+  let selectedLanguage = localStorage.getItem('selectedLanguage') || '';
+  let currentSessionId = localStorage.getItem('currentSessionId') || '';
 
-  // === Utility ===
   function ensureUser() {
     try {
       user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -50,11 +64,13 @@
       user = {};
     }
     if (!user || (!user.email && !user.phone)) {
+      console.warn('No user found in localStorage, redirecting to login');
       window.location.href = '/';
       return;
     }
     userKey = String(user.email || user.phone || '').toLowerCase();
-    if (nameEl) nameEl.textContent = user.name || user.email || 'User';
+    console.log('User loaded:', userKey, 'name:', user.name);
+    if (nameEl) nameEl.textContent = user.name || user.email || user.phone || 'User';
   }
 
   function buildPlayerUrl(course) {
@@ -90,8 +106,8 @@
     }));
   }
 
-  // === Render helpers ===
   function renderCategories() {
+    if (!chipsEl) return;
     const cats = [...new Set(allCourses.map(c => c.mainCategory).filter(Boolean))].sort();
     chipsEl.innerHTML = cats.map(c =>
       `<button class="chip" data-cat="${encodeURIComponent(c)}">${c}</button>`
@@ -99,12 +115,21 @@
   }
 
   function renderSubcategories(cat) {
+    if (!subBarEl) return;
     const subs = [...new Set(
       allCourses
         .filter(c => !cat || c.mainCategory === cat)
         .map(c => c.subcategory)
         .filter(Boolean)
     )].sort();
+    
+    if (subs.length === 0) {
+      subBarEl.classList.add('hidden');
+      subBarEl.innerHTML = '';
+      return;
+    }
+    
+    subBarEl.classList.remove('hidden');
     subBarEl.innerHTML = subs.map(s =>
       `<button class="chip chip--sub" data-sub="${encodeURIComponent(s)}">${s}</button>`
     ).join('');
@@ -156,9 +181,11 @@
   }
 
   function renderAllCourses() {
-    const activeCat = decodeURIComponent($('.chip.active')?.dataset.cat || '');
+    if (!allAreaEl) return;
+    // Fix: specifically target category chips for activeCat
+    const activeCat = decodeURIComponent($('.chip[data-cat].active')?.dataset.cat || '');
     const activeSub = decodeURIComponent($('.chip--sub.active')?.dataset.sub || '');
-    const q = (searchEl.value || '').toLowerCase().trim();
+    const q = (searchEl?.value || '').toLowerCase().trim();
 
     let list = allCourses.filter(c => {
       if (activeCat && c.mainCategory !== activeCat) return false;
@@ -181,9 +208,21 @@
 
   function renderAssignedCourses() {
     let filteredCourses = filterByLanguage(assignedCourses);
+
+    // Apply search filter if search input exists
+    const searchVal = ($('#search-input-assigned')?.value || '').toLowerCase().trim();
+    if (searchVal) {
+      filteredCourses = filteredCourses.filter(c => 
+        (c.title || '').toLowerCase().includes(searchVal) || 
+        (c.description || '').toLowerCase().includes(searchVal) ||
+        (c.mainCategory || '').toLowerCase().includes(searchVal)
+      );
+    }
     
     if (!filteredCourses.length) {
-      assignedEl.innerHTML = `<p style="opacity:.7">No assigned courses match your language filter.</p>`;
+      assignedEl.innerHTML = `<div class="empty-state-card" style="grid-column: 1 / -1; text-align: center; padding: 2rem;">
+        <p style="opacity:.7">No assigned courses found ${searchVal ? 'matching "'+searchVal+'"' : 'matching your filter'}.</p>
+      </div>`;
       assignedSum.textContent = '';
       return;
     }
@@ -234,9 +273,13 @@
   }
 
   function renderQuizzes() {
-    const list = assignedQuizzes.length ? assignedQuizzes : quizzes;
+    // Only show quizzes that were explicitly assigned to the user
+    const list = assignedQuizzes; 
     if (!list.length) {
-      quizzesEl.innerHTML = `<p style="opacity:.7">No quizzes to show.</p>`;
+      quizzesEl.innerHTML = `<div class="empty-state-card" style="text-align:center; padding: 2rem; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 12px; grid-column: 1 / -1;">
+                               <img src="img/thumb-default.jpg" style="width: 64px; opacity: 0.3; margin-bottom: 1rem;" alt="">
+                               <p style="color: #64748b; font-weight: 500;">No quizzes are currently assigned to you.</p>
+                             </div>`;
       return;
     }
     quizzesEl.innerHTML = list.map(quizCard).join('');
@@ -283,36 +326,42 @@
     `;
   }
 
-  // === Tab switching ===
   function setActiveTab(tab) {
     currentTab = tab;
+    localStorage.setItem('activeTab', tab);
 
-    // sidebar active
-    [tabAll, tabAssigned, tabQuizzes, tabLeader, tabFeedback].forEach(el => el.classList.remove('active'));
-    if (tab === 'all') tabAll.classList.add('active');
-    if (tab === 'assigned') tabAssigned.classList.add('active');
-    if (tab === 'quizzes') tabQuizzes.classList.add('active');
-    if (tab === 'leaderboard') tabLeader.classList.add('active');
-    if (tab === 'feedback') tabFeedback.classList.add('active');
+    // sidebar active - only update visible tabs
+    [tabAssigned, tabAiMentor, tabQuizzes, tabLeader, tabFeedback].forEach(el => {
+      if (el) el.classList.remove('active');
+    });
+    if (tabAll) tabAll.classList.remove('active');
+    
+    if (tab === 'all' && tabAll) tabAll.classList.add('active');
+    if (tab === 'assigned' && tabAssigned) tabAssigned.classList.add('active');
+    if (tab === 'ai-mentor' && tabAiMentor) tabAiMentor.classList.add('active');
+    if (tab === 'quizzes' && tabQuizzes) tabQuizzes.classList.add('active');
+    if (tab === 'leaderboard' && tabLeader) tabLeader.classList.add('active');
+    if (tab === 'feedback' && tabFeedback) tabFeedback.classList.add('active');
 
     // panels
-    $('#panel-all').classList.add('hidden');
-    $('#panel-assigned').classList.add('hidden');
-    $('#panel-quizzes').classList.add('hidden');
-    $('#panel-leaderboard').classList.add('hidden');
-    $('#panel-feedback').classList.add('hidden');
+    $('#panel-all')?.classList.add('hidden');
+    $('#panel-assigned')?.classList.add('hidden');
+    $('#panel-ai-mentor')?.classList.add('hidden');
+    $('#panel-quizzes')?.classList.add('hidden');
+    $('#panel-leaderboard')?.classList.add('hidden');
+    $('#panel-feedback')?.classList.add('hidden');
 
-    if (tab === 'all') $('#panel-all').classList.remove('hidden');
-    if (tab === 'assigned') $('#panel-assigned').classList.remove('hidden');
-    if (tab === 'quizzes') $('#panel-quizzes').classList.remove('hidden');
-    if (tab === 'leaderboard') $('#panel-leaderboard').classList.remove('hidden');
-    if (tab === 'feedback') $('#panel-feedback').classList.remove('hidden');
+    if (tab === 'all') $('#panel-all')?.classList.remove('hidden');
+    if (tab === 'assigned') $('#panel-assigned')?.classList.remove('hidden');
+    if (tab === 'ai-mentor') $('#panel-ai-mentor')?.classList.remove('hidden');
+    if (tab === 'quizzes') $('#panel-quizzes')?.classList.remove('hidden');
+    if (tab === 'leaderboard') $('#panel-leaderboard')?.classList.remove('hidden');
+    if (tab === 'feedback') $('#panel-feedback')?.classList.remove('hidden');
 
     // Close sidebar on mobile when switching
     closeSidebar();
   }
 
-  // === Menu (mobile) ===
   function openSidebar() {
     sidebar.classList.add('open');
     backdrop.classList.add('show');
@@ -322,32 +371,107 @@
     backdrop.classList.remove('show');
   }
 
+  function showTypingIndicator() {
+    if (!aiChatMessages) return null;
+    const id = 'typing-' + Date.now();
+    const div = document.createElement('div');
+    div.className = 'ai-msg ai-msg-bot message-fade-in';
+    div.id = id;
+    div.innerHTML = `
+      <div style="display: flex; align-items: center;">
+         <div class="ai-avatar ai-avatar-bot">E</div>
+         <div class="typing-dots"><span></span><span></span><span></span></div>
+      </div>
+    `;
+    aiChatMessages.appendChild(div);
+    aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+    return id;
+  }
+
+  function removeTypingIndicator(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  function appendAiMessage(role, text) {
+    if (!aiChatMessages) return;
+    
+    const div = document.createElement('div');
+    div.className = `ai-msg ai-msg-${role} message-fade-in`;
+    
+    const innerFlex = document.createElement('div');
+    innerFlex.style.cssText = 'display:flex; align-items:flex-start;';
+    
+    const avatar = document.createElement('div');
+    avatar.className = `ai-avatar ai-avatar-${role}`;
+    avatar.textContent = role === 'user' ? 'U' : 'E';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'ai-content';
+    
+    // Render Markdown using 'marked' library if available
+    if (typeof marked !== 'undefined') {
+        contentDiv.innerHTML = marked.parse(text);
+    } else {
+        contentDiv.textContent = text;
+    }
+    
+    innerFlex.appendChild(avatar);
+    innerFlex.appendChild(contentDiv);
+    div.appendChild(innerFlex);
+    
+    aiChatMessages.appendChild(div);
+    aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+  }
+
+  function scrollToBottom() {
+    if (aiChatMessages) {
+      aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+    }
+  }
+
   function wireEvents() {
     // category chips
-    chipsEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-cat]');
-      if (!btn) return;
-      $$('.chip').forEach(x => x.classList.remove('active'));
-      btn.classList.add('active');
-      const cat = decodeURIComponent(btn.dataset.cat || '');
-      renderSubcategories(cat);
-      renderAllCourses();
-    });
+    if (chipsEl) {
+      chipsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-cat]');
+        if (!btn) return;
+        
+        // Remove active only from category chips to be safe
+        $$('#category-chips .chip').forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+        
+        const cat = decodeURIComponent(btn.dataset.cat || '');
+        renderSubcategories(cat);
+        renderAllCourses();
+      });
+    }
 
-    subBarEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-sub]');
-      if (!btn) return;
-      $$('.chip--sub').forEach(x => x.classList.remove('active'));
-      btn.classList.add('active');
-      renderAllCourses();
-    });
+    if (subBarEl) {
+      subBarEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-sub]');
+        if (!btn) return;
+        $$('.chip--sub').forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+        renderAllCourses();
+      });
+    }
 
     // search
-    searchEl.addEventListener('input', () => {
-      if (currentTab === 'all') {
-        renderAllCourses();
-      }
-    });
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        if (currentTab === 'all') {
+          renderAllCourses();
+        }
+      });
+    }
+
+    const searchAssignedEl = $('#search-input-assigned');
+    if (searchAssignedEl) {
+      searchAssignedEl.addEventListener('input', () => {
+        renderAssignedCourses();
+      });
+    }
 
     // language filter
     if (languageFilter) {
@@ -360,18 +484,22 @@
       });
     }
 
-    // tabs
-    tabAll.addEventListener('click', () => setActiveTab('all'));
-    tabAssigned.addEventListener('click', () => setActiveTab('assigned'));
-    tabQuizzes.addEventListener('click', () => setActiveTab('quizzes'));
-    tabLeader.addEventListener('click', () => setActiveTab('leaderboard'));
-    tabFeedback.addEventListener('click', () => setActiveTab('feedback'));
+    // tabs - only add listeners to tabs that exist
+    if (tabAll) tabAll.addEventListener('click', () => setActiveTab('all'));
+    if (tabAssigned) tabAssigned.addEventListener('click', () => setActiveTab('assigned'));
+    if (tabAiMentor) tabAiMentor.addEventListener('click', () => setActiveTab('ai-mentor'));
+    if (tabQuizzes) tabQuizzes.addEventListener('click', () => setActiveTab('quizzes'));
+    if (tabLeader) tabLeader.addEventListener('click', () => setActiveTab('leaderboard'));
+    if (tabFeedback) tabFeedback.addEventListener('click', () => setActiveTab('feedback'));
 
     // logout
-    logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('user');
-      window.location.href = '/';
-    });
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('user');
+        localStorage.removeItem('activeTab');
+        window.location.href = '/';
+      });
+    }
 
     // mobile menu
     if (menuToggle) {
@@ -418,6 +546,237 @@
         }
       });
     }
+
+    // AI Chat
+    if (aiChatForm) {
+      // Speech Recognition
+      const aiMicBtn = $('#ai-mic-btn');
+      if (aiMicBtn) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          aiMicBtn.style.display = 'none'; 
+        } else {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = false;
+          recognition.lang = 'en-IN'; // Optimized for Indian context
+
+          let isListening = false;
+
+          aiMicBtn.addEventListener('click', () => {
+            if (isListening) {
+              recognition.stop();
+            } else {
+              recognition.start();
+            }
+          });
+
+          recognition.onstart = () => {
+            isListening = true;
+            aiMicBtn.classList.add('listening');
+            aiChatInput.placeholder = 'Listening...';
+          };
+
+          recognition.onend = () => {
+            isListening = false;
+            aiMicBtn.classList.remove('listening');
+            aiChatInput.placeholder = 'Ask me anything...';
+          };
+
+          recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            aiChatInput.value = transcript;
+            // Focus input after speech
+            aiChatInput.focus();
+          };
+
+          recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            isListening = false;
+            aiMicBtn.classList.remove('listening');
+            aiChatInput.placeholder = 'Ask me anything...';
+          };
+        }
+      }
+
+      aiChatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = (aiChatInput.value || '').trim();
+        if (!msg) return;
+        
+        // Ensure session exists
+        if (!currentSessionId) {
+           await createNewSession();
+        }
+
+        // 1. User Message
+        appendAiMessage('user', msg);
+        aiChatInput.value = '';
+
+        // Show typing indicator
+        const typingId = showTypingIndicator();
+
+        // 2. Bot Request
+        try {
+          const resp = await fetch(AI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: user.email || '',
+              message: msg,
+              sessionId: currentSessionId
+            })
+          });
+          const data = await resp.json();
+          
+          removeTypingIndicator(typingId);
+
+          if (!resp.ok) {
+            appendAiMessage('bot', 'Sorry, I encountered an error. Please try again.');
+          } else {
+            appendAiMessage('bot', data.reply || 'No response.');
+            // Refresh list to update title/timestamps
+            loadSessionList(); 
+          }
+        } catch (err) {
+          console.error('AI error', err);
+          removeTypingIndicator(typingId);
+          appendAiMessage('bot', 'Error connecting to AI service.');
+        }
+      });
+    }
+    
+    // New Chat Button
+    if (aiNewChatBtn) {
+        aiNewChatBtn.addEventListener('click', () => {
+             createNewSession().then(() => {
+                 aiChatMessages.innerHTML = '';
+                 // Optional welcome message
+                 appendAiMessage('bot', '**New Chat Started.** How can I help?');
+             });
+        });
+    }
+  }
+
+  // === Session Management ===
+
+  async function createNewSession() {
+      if (!user || !user.email) return;
+      try {
+          const resp = await fetch(AI_CREATE_SESSION_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email })
+          });
+          const data = await resp.json();
+          const newId = data.sessionId;
+          
+          currentSessionId = newId;
+          localStorage.setItem('currentSessionId', newId);
+
+          // Clear the "Welcome Screen" and show a fresh chat message
+          aiChatMessages.innerHTML = ''; 
+          appendAiMessage('bot', '**New Chat Started.** How can I help?');
+          
+          await loadSessionList();
+          selectSessionInUi(newId);
+      } catch (err) {
+          console.error('Failed to create session', err);
+      }
+  }
+
+  async function loadSessionList() {
+      if (!user || !user.email) return;
+      try {
+          const url = `${AI_SESSION_LIST_URL}?email=${encodeURIComponent(user.email)}`;
+          const resp = await fetch(url);
+          const data = await resp.json();
+          renderSessionList(data.sessions || []);
+      } catch (err) {
+          console.error('Failed to load sessions', err);
+      }
+  }
+
+  function renderSessionList(sessions) {
+      if (!aiHistoryList) return;
+      
+      // If no sessions, showing nothing or empty state
+      if (sessions.length === 0 && !currentSessionId) {
+          aiHistoryList.innerHTML = '<div style="padding:0.5rem;color:#9ca3af;font-size:13px;">No chats yet.</div>';
+          return;
+      }
+      
+      aiHistoryList.innerHTML = sessions.map(s => {
+          const activeClass = s.id === currentSessionId ? 'active' : '';
+          const title = s.title || 'New Chat';
+          return `
+            <div class="ai-history-item-wrapper" data-id="${s.id}">
+              <div class="ai-history-item ${activeClass}">${title}</div>
+              <button class="ai-delete-chat-btn" title="Delete chat">✕</button>
+            </div>`;
+      }).join('');
+      
+      // Add click listeners for chat selection
+      $$('.ai-history-item').forEach(el => {
+          el.addEventListener('click', () => {
+              const id = el.closest('.ai-history-item-wrapper').dataset.id;
+              switchSession(id);
+          });
+      });
+      
+      // Add click listeners for delete buttons
+      $$('.ai-delete-chat-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const id = btn.closest('.ai-history-item-wrapper').dataset.id;
+              deleteSession(id);
+          });
+      });
+  }
+
+  async function switchSession(id) {
+     console.log('Switching to session:', id);
+     currentSessionId = id;
+     localStorage.setItem('currentSessionId', id);
+     
+     // Update UI active state
+     selectSessionInUi(id);
+     
+     // Show loading state
+     aiChatMessages.innerHTML = `
+        <div style="display:flex; justify-content:center; align-items:center; height:100%;">
+            <div class="typing-dots"><span></span><span></span><span></span></div>
+        </div>`;
+     
+     // Load Messages
+     await loadAiHistory(); 
+  }
+
+  async function deleteSession(id) {
+     if (!confirm('Are you sure you want to delete this chat?')) return;
+     
+     try {
+         const resp = await fetch(`http://localhost:3002/ai/session/${encodeURIComponent(id)}`, {
+             method: 'DELETE',
+             headers: { 'Content-Type': 'application/json' }
+         });
+         const data = await resp.json();
+         if (!resp.ok) throw new Error(data.message || 'Failed to delete');
+         
+         // If deleting current session, switch to a new one
+         if (id === currentSessionId) {
+             currentSessionId = '';
+             localStorage.removeItem('currentSessionId');
+             aiChatMessages.innerHTML = '';
+             showAiWelcomeState();
+         }
+         
+         // Reload the session list
+         await loadSessionList();
+     } catch (err) {
+         console.error('Failed to delete session', err);
+         alert('Failed to delete chat. Please try again.');
+     }
   }
 
   // === Data fetch ===
@@ -480,6 +839,31 @@
       assignedEl.innerHTML = `<p style="color:#c00">Failed to load assigned courses.</p>`;
     }
 
+    // Load Session List & History
+    await loadSessionList();
+    
+    // Logic: If user has a last active session, resume it.
+    // If NOT, stay on the "Welcome" empty state. 
+    // Do NOT auto-create a session and empty screen.
+    if (localStorage.getItem('currentSessionId')) {
+        const lastId = localStorage.getItem('currentSessionId');
+        // Verify it exists in our loaded list
+        const exists = $$('.ai-history-item').some(el => el.dataset.id === lastId);
+        if (exists) {
+            currentSessionId = lastId;
+            selectSessionInUi(lastId);
+            loadAiHistory();
+        } else {
+           // Invalid ID, clear it
+           localStorage.removeItem('currentSessionId');
+           currentSessionId = null;
+           showAiWelcomeState();
+        }
+    } else {
+        // No active session, show welcome state
+        showAiWelcomeState();
+    }
+    
     try {
       // Quizzes
       const [allQ, assignedQ] = await Promise.all([
@@ -503,11 +887,103 @@
     }
   }
 
+  async function loadAiHistory() {
+    if (!currentSessionId) return;
+    try {
+      console.log('Fetching history for:', currentSessionId);
+      const url = `${AI_HISTORY_URL}?sessionId=${encodeURIComponent(currentSessionId)}`;
+      const resp = await fetch(url);
+      
+      if (!resp.ok) {
+        console.error('History fetch failed:', resp.status);
+        aiChatMessages.innerHTML = `<div style="text-align:center;color:red;padding:2rem;">
+            Failed to load history (Status: ${resp.status}). 
+        </div>`;
+        return;
+      }
+      
+      const data = await resp.json();
+      const history = data.history;
+      console.log('History loaded, length:', history ? history.length : 0);
+      
+      aiChatMessages.innerHTML = ''; // Ensure clear
+      
+      if (history && history.length > 0) {
+        history.forEach(item => {
+           // Handle 'assistant' role from legacy keyword fallback too
+           const role = (item.role === 'model' || item.role === 'assistant') ? 'bot' : item.role;
+           appendAiMessage(role, item.content);
+        });
+        scrollToBottom();
+      } else {
+         // It's an empty session (e.g. just created), assume "New Chat" flow
+         appendAiMessage('bot', '**Hi there!** How can I help you?');
+      }
+    } catch (err) {
+      console.error('Failed to load chat history', err);
+      aiChatMessages.innerHTML = `<div style="text-align:center;color:red;padding:2rem;">
+        Error loading history: ${err.message}<br>
+        <small>Session: ${currentSessionId}</small><br><br>
+        <button id="retry-history-btn" class="btn btn--primary" style="padding:0.5rem 1rem;">Retry</button>
+      </div>`;
+      
+      document.getElementById('retry-history-btn')?.addEventListener('click', () => loadAiHistory());
+    }
+  }
+  
+  function selectSessionInUi(id) {
+       $$('.ai-history-item').forEach(el => el.classList.remove('active'));
+       $(`.ai-history-item[data-id="${id}"]`)?.classList.add('active');
+  }
+
   // === Init ===
-  function init() {
+  async function init() {
+    console.log('Dashboard initializing...');
     ensureUser();
+    console.log('User ensured, wiring events...');
     wireEvents();
-    loadAll().catch(err => console.error(err));
+    
+    // Restore tab
+    let tabToShow = currentTab;
+    if (!tabToShow) {
+      tabToShow = 'assigned'; // Default to assigned courses
+    }
+    console.log('Setting active tab to:', tabToShow);
+    setActiveTab(tabToShow);
+
+    // Initial UI state for AI
+    if (aiChatMessages) {
+        console.log('Showing AI welcome state');
+        showAiWelcomeState();
+    }
+    
+    console.log('Loading all data...');
+    await loadAll().catch(err => console.error('Dashboard load error:', err));
+    console.log('Dashboard fully loaded');
+  }
+  
+  function showAiWelcomeState() {
+      aiChatMessages.innerHTML = `
+        <div class="ai-empty-state">
+            <div class="ai-empty-logo">E</div>
+            <h2>Hello, ${user ? user.name : 'Learner'}</h2>
+            <p>How can I help you regarding your courses today?</p>
+            <div class="ai-suggestions">
+                <button class="ai-suggestion-chip">What courses are assigned to me?</button>
+                <button class="ai-suggestion-chip">Show me the leaderboard</button>
+                <button class="ai-suggestion-chip">I need help with "Leadership"</button>
+            </div>
+        </div>
+      `;
+      
+      // Wire up suggestions
+      $$('.ai-suggestion-chip').forEach(btn => {
+          btn.addEventListener('click', () => {
+              const text = btn.textContent;
+              aiChatInput.value = text;
+              aiChatForm.dispatchEvent(new Event('submit'));
+          });
+      });
   }
 
   if (document.readyState === 'loading') {

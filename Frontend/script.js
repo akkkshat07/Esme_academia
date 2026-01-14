@@ -1,10 +1,16 @@
-// script.js – login page logic for ESME LMS
-
 (function () {
+  try {
+    const existingUser = JSON.parse(localStorage.getItem('user'));
+    if (existingUser && (existingUser.email || existingUser.phone)) {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+  } catch (e) {}
+
   const form = document.getElementById('loginForm');
   const emailOrPhoneEl = document.getElementById('emailOrPhone');
   const passwordEl = document.getElementById('password');
-  const errorEl = document.getElementById('loginError');
+  const errorEl = document.getElementById('passwordError');
 
   function setError(msg) {
     if (errorEl) errorEl.textContent = msg || '';
@@ -12,7 +18,6 @@
 
   function cleanPhoneLike(input) {
     const digits = String(input || '').replace(/\D+/g, '');
-    // if it looks like a phone, send only digits to backend; otherwise treat as email
     return digits.length >= 7 ? digits : input;
   }
 
@@ -32,7 +37,7 @@
     const btn = form?.querySelector('button[type="submit"]');
     if (btn) {
       btn.disabled = true;
-      btn.textContent = 'Signing in…';
+      btn.textContent = 'Signing in';
     }
 
     try {
@@ -55,9 +60,16 @@
         return;
       }
 
-      // Save user info and go to dashboard
       localStorage.setItem('user', JSON.stringify(data.user || {}));
-      window.location.href = '/dashboard.html';
+      // Default to "All Courses" tab on fresh login
+      localStorage.setItem('activeTab', 'all');
+      
+      const userRole = (data.user?.role || '').toLowerCase();
+      if (userRole === 'admin') {
+        window.location.href = '/admin-portal/admin.html';
+      } else {
+        window.location.href = '/dashboard.html';
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError('Network error. Please try again.');

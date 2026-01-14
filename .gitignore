@@ -34,3 +34,5 @@ ehthumbs.db
 # Temporary files
 .backend.pid
 .frontend.pid
+.admin.pid
+admin-server/chat_history.json

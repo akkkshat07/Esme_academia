@@ -1,14 +1,52 @@
 <!doctype html>
-<html><head>
+<html lang="en">
+<head>
   <meta charset="utf-8"/>
-  <title>AI Coach</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esme AI Mentor</title>
   <link rel="stylesheet" href="ai.css"/>
-</head><body>
-  <h1>AI Coach</h1>
-  <div id="chat"></div>
-  <form id="chat-form">
-    <input id="msg" placeholder="Ask for a learning suggestion..." required/>
-    <button>Send</button>
-  </form>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  
+  <header>
+    <div class="header-content">
+      <h2>Esme AI Mentor</h2>
+      <p>Expert Guidance for your Career</p>
+    </div>
+  </header>
+
+  <main id="chat-container">
+    <div id="chat-messages">
+       <!-- Welcome Message -->
+       <div class="message bot">
+         <div class="avatar">E</div>
+         <div class="bubble">
+           <p>Hello! I'm <strong>Esme</strong>, your personal AI Mentor.</p>
+           <p>I can help you navigate our Competency Framework, suggest learning paths, or give advice on professional development. How can I help you today?</p>
+         </div>
+       </div>
+    </div>
+    <div id="typing-indicator" class="hidden">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+  </main>
+
+  <footer class="input-area">
+    <form id="chat-form">
+      <div class="input-wrapper">
+        <input id="msg" type="text" placeholder="Ask Esme a question..." autocomplete="off" required/>
+        <button type="submit" aria-label="Send">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </form>
+  </footer>
+
   <script src="ai.js"></script>
-</body></html>
+</body>
+</html>
