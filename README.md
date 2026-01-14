@@ -1,4 +1,4 @@
-# Esme Learning Academy LMS
+# Esme Learning Academy 
 
 Esme Learning Academy is a Learning Management System (LMS) designed to deliver video-based training content, quizzes, and progress tracking. It uses **Google Sheets** as a database for easy content management and **Firebase Storage** for hosting video assets.
 
