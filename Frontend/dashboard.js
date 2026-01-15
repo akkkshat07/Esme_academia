@@ -57,6 +57,9 @@
   let availableLanguages = [];
   let selectedLanguage = localStorage.getItem('selectedLanguage') || '';
   let currentSessionId = localStorage.getItem('currentSessionId') || '';
+  
+  // Track the single active main category
+  let selectedMainCategory = null;
 
   function ensureUser() {
     try {
@@ -109,6 +112,14 @@
 
   function renderCategories() {
     if (!chipsEl) return;
+    
+    // If a main category is selected, show only that one (to hide others)
+    if (selectedMainCategory) {
+       chipsEl.innerHTML = `<button class="chip active" data-cat="${encodeURIComponent(selectedMainCategory)}">${selectedMainCategory}</button>`;
+       return;
+    }
+
+    // Otherwise show all unique main categories from the data
     const cats = [...new Set(allCourses.map(c => c.mainCategory).filter(Boolean))].sort();
     chipsEl.innerHTML = cats.map(c =>
       `<button class="chip" data-cat="${encodeURIComponent(c)}">${c}</button>`
@@ -117,19 +128,30 @@
 
   function renderSubcategories(cat) {
     if (!subBarEl) return;
+    
+    // Fix: If NO Main Category is selected, DO NOT show subcategories
+    if (!cat) {
+        subBarEl.classList.add('hidden');
+        subBarEl.innerHTML = '';
+        return;
+    }
+
+    // Filter subcategories strictly for the selected Main Category
     const subs = [...new Set(
       allCourses
-        .filter(c => !cat || c.mainCategory === cat)
+        .filter(c => c.mainCategory === cat)
         .map(c => c.subcategory)
         .filter(Boolean)
     )].sort();
     
+    // If no subs for this category, hide bar
     if (subs.length === 0) {
       subBarEl.classList.add('hidden');
       subBarEl.innerHTML = '';
       return;
     }
     
+    // Show sub filters
     subBarEl.classList.remove('hidden');
     subBarEl.innerHTML = subs.map(s =>
       `<button class="chip chip--sub" data-sub="${encodeURIComponent(s)}">${s}</button>`
@@ -144,7 +166,7 @@
   }
 
   function courseCard(course, opts = {}) {
-    const thumb = course.thumbnailUrl || 'img/placeholder.jpg';
+    const thumb = course.thumbnailUrl || 'img/thumb-default.jpg';
     const dur   = course.duration_seconds ? ` - ${Math.round(course.duration_seconds / 60)} min` : '';
     const catLabel = course.mainCategory
       ? (course.subcategory ? `${course.mainCategory} - ${course.subcategory}` : course.mainCategory)
@@ -183,8 +205,10 @@
 
   function renderAllCourses() {
     if (!allAreaEl) return;
-    // Fix: specifically target category chips for activeCat
-    const activeCat = decodeURIComponent($('.chip[data-cat].active')?.dataset.cat || '');
+    
+    // Check our state variable for the main category
+    const activeCat = selectedMainCategory || '';
+    // Sub category is still picked from the active chip in the sub-bar (if any)
     const activeSub = decodeURIComponent($('.chip--sub.active')?.dataset.sub || '');
     const q = (searchEl?.value || '').toLowerCase().trim();
 
@@ -438,12 +462,21 @@
         const btn = e.target.closest('button[data-cat]');
         if (!btn) return;
         
-        // Remove active only from category chips to be safe
-        $$('#category-chips .chip').forEach(x => x.classList.remove('active'));
-        btn.classList.add('active');
-        
+        // Use state to determine logic
         const cat = decodeURIComponent(btn.dataset.cat || '');
-        renderSubcategories(cat);
+        
+        if (selectedMainCategory === cat) {
+           // If clicking the active one, toggle OFF (Reset)
+           selectedMainCategory = null;
+           renderCategories();          // Shows all chips again
+           renderSubcategories(null);   // Hides sub-bar
+        } else {
+           // Activate this category
+           selectedMainCategory = cat;
+           renderCategories();          // Shows only this chip
+           renderSubcategories(cat);    // Shows sub-bar
+        }
+        
         renderAllCourses();
       });
     }
@@ -526,23 +559,41 @@
         feedbackStatus.textContent = 'Sending�';
         feedbackStatus.style.color = '#4b5563';
         try {
+          // Ensure user is available
+          if (!user || !user.email) {
+            console.error('User not available:', user);
+            throw new Error('User not authenticated');
+          }
+          
+          const feedbackData = {
+            email: user.email || '',
+            name: user.name || '',
+            message: msg
+          };
+          
+          console.log('Sending feedback:', feedbackData);
+          
           const resp = await fetch('/api/feedback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: user.email || '',
-              name: user.name || '',
-              message: msg
-            })
+            body: JSON.stringify(feedbackData)
           });
+          
+          console.log('Feedback response status:', resp.status);
+          
           const data = await resp.json();
-          if (!resp.ok || !data.ok) throw new Error(data.message || 'Failed');
+          console.log('Feedback response data:', data);
+          
+          if (!resp.ok || !data.ok) {
+            throw new Error(data.message || `HTTP ${resp.status}`);
+          }
+          
           feedbackStatus.textContent = 'Thank you for your feedback!';
           feedbackStatus.style.color = '#15803d';
           feedbackText.value = '';
         } catch (err) {
-          console.error('feedback error', err);
-          feedbackStatus.textContent = 'Sorry, something went wrong. Please try again.';
+          console.error('feedback error:', err.message, err);
+          feedbackStatus.textContent = `Error: ${err.message}`;
           feedbackStatus.style.color = '#b91c1c';
         }
       });
@@ -628,21 +679,28 @@
               sessionId: currentSessionId
             })
           });
-          const data = await resp.json();
           
+          if (!resp.ok) {
+            removeTypingIndicator(typingId);
+            console.error('AI response error:', resp.status, resp.statusText);
+            appendAiMessage('bot', `Error (${resp.status}): ${resp.statusText}. Please check if the AI service is running.`);
+            return;
+          }
+          
+          const data = await resp.json();
           removeTypingIndicator(typingId);
 
-          if (!resp.ok) {
-            appendAiMessage('bot', 'Sorry, I encountered an error. Please try again.');
-          } else {
-            appendAiMessage('bot', data.reply || 'No response.');
+          if (data.reply) {
+            appendAiMessage('bot', data.reply);
             // Refresh list to update title/timestamps
             loadSessionList(); 
+          } else {
+            appendAiMessage('bot', 'Sorry, I didn\'t get a response. Please try again.');
           }
         } catch (err) {
           console.error('AI error', err);
           removeTypingIndicator(typingId);
-          appendAiMessage('bot', 'Error connecting to AI service.');
+          appendAiMessage('bot', `Error: ${err.message}. Make sure the AI service is running on port 3002.`);
         }
       });
     }
@@ -654,7 +712,31 @@
                  aiChatMessages.innerHTML = '';
                  // Optional welcome message
                  appendAiMessage('bot', '**New Chat Started.** How can I help?');
+                 
+                 // Close mobile history if open
+                 const hist = $('.ai-history-sidebar');
+                 if (hist) hist.classList.remove('open-mobile');
              });
+        });
+    }
+    
+    // AI History Toggle (Mobile)
+    const aiHistoryToggle = $('#ai-history-toggle');
+    const aiHistorySidebar = $('.ai-history-sidebar');
+    
+    if (aiHistoryToggle && aiHistorySidebar) {
+        aiHistoryToggle.addEventListener('click', (e) => {
+           e.stopPropagation();
+           aiHistorySidebar.classList.toggle('open-mobile');
+        });
+        
+        // Close when clicking outside (on backdrop logic if we added one, strict click handling for now)
+        document.addEventListener('click', (e) => {
+           if (aiHistorySidebar.classList.contains('open-mobile')) {
+               if (!aiHistorySidebar.contains(e.target) && !aiHistoryToggle.contains(e.target)) {
+                   aiHistorySidebar.classList.remove('open-mobile');
+               }
+           }
         });
     }
   }
@@ -881,10 +963,11 @@
 
     try {
       const leaderboard = await fetchJSON('/api/leaderboard');
+      console.log('Leaderboard data received:', leaderboard);
       renderLeaderboard(leaderboard);
     } catch (err) {
       console.error('leaderboard load error', err);
-      leaderboardEl.innerHTML = `<p style="color:#c00">Failed to load leaderboard.</p>`;
+      leaderboardEl.innerHTML = `<p style="color:#c00">Failed to load leaderboard: ${err.message}</p>`;
     }
   }
 

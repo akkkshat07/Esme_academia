@@ -113,8 +113,17 @@
         <div class="ai-layout">
            <main class="ai-main-area">
               <header class="dashboard-header" style="margin-bottom: 0.5rem; justify-content: flex-start; gap: 1rem;">
-                <div class="header-left">
-                  <h1>Esme AI Mentor</h1>
+                <div class="header-left" style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                  <div>
+                    <h1>Esme AI Mentor</h1>
+                    <p style="margin: 0; font-size: 0.9rem; color: #6b7280; display:none;" id="ai-subtitle-desktop">Your personal guide</p>
+                  </div>
+                  <button id="ai-history-toggle" class="btn btn--secondary" style="display: none; padding: 0.5rem;">
+                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                       <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                     </svg>
+                     <span style="margin-left:5px; font-size:0.9rem;">History</span>
+                  </button>
                 </div>
               </header>
       

@@ -23,33 +23,53 @@ app.use(express.json());
 
 // ---------- Google Sheets (service account via PEM) ----------
 const pemPath = path.join(__dirname, process.env.PRIVATE_KEY_PATH || 'private_key.pem');
-const privateKey = fs.existsSync(pemPath) ? fs.readFileSync(pemPath, 'utf8') : undefined;
+let privateKey;
+try {
+  if (fs.existsSync(pemPath)) {
+    privateKey = fs.readFileSync(pemPath, 'utf8');
+  } else {
+    console.warn('[Warning] private_key.pem not found. Google Sheets integration disabled.');
+  }
+} catch (e) {
+  console.warn('[Warning] Failed to read private_key.pem:', e.message);
+}
 
 const sheetsAuth = new google.auth.GoogleAuth({
   credentials: {
     type: 'service_account',
     project_id: process.env.GOOGLE_PROJECT_ID,
     private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
-    private_key: privateKey,
+    private_key: privateKey, // May be undefined
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
     client_id: process.env.GOOGLE_CLIENT_ID
   },
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 async function sheetsClient() {
+  if (!privateKey) throw new Error('Google Sheets disabled (missing private key)');
   const client = await sheetsAuth.getClient();
   return google.sheets({ version: 'v4', auth: client });
 }
 
 // ---------- Firebase Admin (Storage via JSON) ----------
 const fbJsonPath = path.join(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 'firebase-admin.json');
-const fbServiceAccount = JSON.parse(fs.readFileSync(fbJsonPath, 'utf8'));
+let bucket = null;
 
-admin.initializeApp({
-  credential: admin.credential.cert(fbServiceAccount),
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET
-});
-const bucket = admin.storage().bucket();
+try {
+  if (fs.existsSync(fbJsonPath)) {
+    const fbServiceAccount = JSON.parse(fs.readFileSync(fbJsonPath, 'utf8'));
+    admin.initializeApp({
+      credential: admin.credential.cert(fbServiceAccount),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+    });
+    bucket = admin.storage().bucket();
+    console.log('[Info] Firebase Admin initialized.');
+  } else {
+    console.warn('[Warning] firebase-admin.json not found. Firebase Storage disabled.');
+  }
+} catch (e) {
+  console.warn('[Warning] Failed to initialize Firebase:', e.message);
+}
 
 // ---------- Email (optional) ----------
 let transporter = null;
@@ -364,10 +384,24 @@ PERSONALIZATION GUIDELINES:
       return res.json({ reply });
     } catch (err) {
       console.error('Gemini error:', err);
+      console.log('[AI] Falling back to keyword search due to Gemini error');
     }
+  } else {
+    console.warn('[AI] Gemini not configured (GEMINI_API_KEY missing). Using keyword search fallback.');
   }
 
   handleKeywordSearch(message, res, history);
+});
+
+// Endpoint: Health Check for AI Service
+app.get('/ai/health', (req, res) => {
+  res.json({
+    ok: true,
+    status: 'AI service running',
+    gemini_configured: !!genAI,
+    firebase_configured: !!bucket,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Endpoint: Get list of sessions for a user

@@ -149,7 +149,11 @@
   }
 
   function renderPlaylist() {
-      if (!playlistEl) return;
+      // Safety check for UI element (might be null on some pages)
+      if (!playlistEl) {
+         console.warn('Playlist element not found in DOM');
+         return; 
+      }
       
       // Find current video index in full list for navigation
       currentIndex = coursesList.findIndex(c => c.title === title || c.url === url);
@@ -169,6 +173,8 @@
           updateNavButtons(); // ensure buttons are updated even if list is empty
           return;
       }
+
+      console.log(`Rendering playlist with ${filtered.length} items.`);
 
       const html = filtered.map((c) => {
           // Identify if this item is the currently playing one

@@ -86,7 +86,7 @@ const server = http.createServer((req, res) => {
 
     const aiReq = http.request(aiOptions, (aiRes) => {
       res.writeHead(aiRes.statusCode, aiRes.headers);
-      apiRes.pipe(res);
+      aiRes.pipe(res);
     });
 
     aiReq.on('error', (err) => {

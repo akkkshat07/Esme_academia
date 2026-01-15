@@ -683,6 +683,8 @@ app.get('/api/leaderboard', async (req, res) => {
     const compRows = compRsp.data.values || [];
     const userRows = usersRsp.data.values || [];
 
+    console.log(`Leaderboard: ${compRows.length} completions, ${userRows.length} users`);
+
     // email -> name
     const nameByEmail = new Map();
     for (const r of userRows) {
@@ -690,6 +692,8 @@ app.get('/api/leaderboard', async (req, res) => {
       const email = (r[3] || '').trim().toLowerCase(); // email
       if (email) nameByEmail.set(email, name);
     }
+
+    console.log(`Found ${nameByEmail.size} unique users`);
 
     // aggregate
     const stats = new Map(); // email -> {seconds, courses:Set}
@@ -711,6 +715,8 @@ app.get('/api/leaderboard', async (req, res) => {
       s.seconds += seconds;
       s.courses.add(title);
     }
+
+    console.log(`Aggregated ${stats.size} users with completed courses`);
 
     const rows = Array.from(stats.entries()).map(([email, s]) => {
       const hours = s.seconds / 3600;
@@ -743,6 +749,7 @@ app.get('/api/leaderboard', async (req, res) => {
       };
     });
 
+    console.log(`Returning top ${top.length} leaderboard entries`);
     res.json({ ok: true, data: top });
   } catch (err) {
     console.error('GET /api/leaderboard error:', err);
@@ -753,26 +760,48 @@ app.get('/api/leaderboard', async (req, res) => {
 app.post('/api/feedback', async (req, res) => {
   try {
     const { email, name, message } = req.body || {};
+    console.log('Feedback received:', { email, name, message });
+    
     if (!email || !message) {
+      console.warn('Feedback validation failed - missing email or message');
       return res.status(400).json({ ok: false, message: 'Missing email / message' });
     }
 
-    const sheets = await sheetsClient();
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Feedback!A2',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [[
-          new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-          String(email).trim(),
-          String(name || '').trim(),
-          String(message).trim()
-        ]]
-      }
-    });
+    let savedToSheets = false;
+    try {
+        const sheets = await sheetsClient();
+        const appendResp = await sheets.spreadsheets.values.append({
+          spreadsheetId: process.env.SHEET_ID,
+          range: 'Feedback!A2',
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: [[
+              new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+              String(email).trim(),
+              String(name || '').trim(),
+              String(message).trim()
+            ]]
+          }
+        });
+        savedToSheets = true;
+        console.log('Feedback saved to Google Sheets:', appendResp.data);
+    } catch (sheetErr) {
+        console.warn('Google Sheets feedback save failed:', sheetErr.message);
+        const logLine = JSON.stringify({
+            date: new Date().toISOString(),
+            email,
+            name,
+            message
+        }) + '\n';
+        try {
+          fs.appendFileSync(path.join(__dirname, 'feedback_backup.jsonl'), logLine);
+          console.log('Feedback saved to backup file');
+        } catch (fileErr) {
+          console.error('Failed to save feedback backup:', fileErr.message);
+        }
+    }
 
-    res.json({ ok: true });
+    res.json({ ok: true, savedToSheets });
   } catch (err) {
     console.error('POST /api/feedback error:', err);
     res.status(500).json({ ok: false, message: 'Failed to save feedback' });
