@@ -502,11 +502,30 @@ app.get('/api/languages', async (req, res) => {
   res.json({ ok: true, data: ['English', 'Hindi'] });
 });
 
+// ---------- Caching Mechanism ----------
+const CACHE = {
+  leaderboard: { data: null, expiry: 0 },
+  courses: { data: null, expiry: 0 },
+  quizzes: { data: null, expiry: 0 },
+  assigned: {} // Map key (email) -> { data: ..., expiry: ... }
+};
+
+const CACHE_TTL = 60 * 1000; // 60 seconds
+
 // ---------- GET /api/courses/filter?language=... ----------
 // Filter courses by language
 app.get('/api/courses/filter', async (req, res) => {
   try {
     const language = String(req.query.language || 'English').trim();
+    const now = Date.now();
+
+    // Check Cache
+    if (CACHE.courses.data && CACHE.courses.expiry > now) {
+      console.log('Serving courses from cache');
+      const cachedList = CACHE.courses.data.filter(item => item.language === language);
+      return res.json({ ok: true, data: cachedList });
+    }
+
     const sheets = await sheetsClient();
     const resp = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SHEET_ID,
@@ -514,30 +533,30 @@ app.get('/api/courses/filter', async (req, res) => {
     });
 
     const rows = resp.data.values || [];
-    const list = rows
-      .map((r) => {
+    const list = rows.map((r) => {
         const lang = detectLanguage(r);
         return {
-          row: r,
+          mainCategory: r[0] || '',
+          subcategory: r[1] || '',
+          topic: r[2] || '',
+          title: r[3] || '',
+          description: r[4] || '',
+          url: r[5] || '',
+          duration_seconds: Number(r[6] || 0),
+          type: (r[7] || 'video').toLowerCase(),
+          thumbnailUrl: r[8] || '',
+          downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
           language: lang
         };
-      })
-      .filter(item => item.language === language)
-      .map(({ row: r, language: lang }) => ({
-        mainCategory: r[0] || '',
-        subcategory: r[1] || '',
-        topic: r[2] || '',
-        title: r[3] || '',
-        description: r[4] || '',
-        url: r[5] || '',
-        duration_seconds: Number(r[6] || 0),
-        type: (r[7] || 'video').toLowerCase(),
-        thumbnailUrl: r[8] || '',
-        downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
-        language: lang
-      }));
+    });
 
-    res.json({ ok: true, data: list });
+    // Update Cache
+    CACHE.courses.data = list;
+    CACHE.courses.expiry = now + CACHE_TTL;
+
+    const filteredList = list.filter(item => item.language === language);
+    res.json({ ok: true, data: filteredList });
+
   } catch (e) {
     console.error('GET /api/courses/filter error:', e.message);
     res.status(500).json({ ok: false, message: 'Failed to filter courses' });
@@ -667,6 +686,12 @@ app.get('/api/assigned', async (req, res) => {
 // ---------- GET /api/leaderboard ----------
 app.get('/api/leaderboard', async (req, res) => {
   try {
+    const now = Date.now();
+    if (CACHE.leaderboard.data && CACHE.leaderboard.expiry > now) {
+       console.log('Serving leaderboard from cache');
+       return res.json({ ok: true, data: CACHE.leaderboard.data });
+    }
+
     const sheets = await sheetsClient();
 
     const [compRsp, usersRsp] = await Promise.all([
