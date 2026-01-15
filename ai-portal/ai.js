@@ -1,4 +1,4 @@
-const API = 'http://localhost:3002';
+const API = ''; // Relative path because frontend-server proxies requests
 const email = localStorage.getItem('currentUserEmail') || 'guest@company.com'; 
 const sessionId = Date.now().toString(); // Simple session tracking
 

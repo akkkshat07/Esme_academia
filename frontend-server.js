@@ -71,8 +71,8 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Proxy AI requests to Admin/AI server
-  if (pathname.startsWith('/ai/')) {
+  // Proxy AI and Admin requests to Admin/AI server (Port 3002)
+  if (pathname.startsWith('/ai/') || pathname.startsWith('/admin/')) {
     const aiPath = pathname + (parsedUrl.search || '');
     const aiOptions = {
       hostname: API_HOST,
@@ -90,9 +90,9 @@ const server = http.createServer((req, res) => {
     });
 
     aiReq.on('error', (err) => {
-      console.error('AI proxy error:', err);
+      console.error('AI/Admin proxy error:', err);
       res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: false, message: 'AI Service Unavailable' }));
+      res.end(JSON.stringify({ ok: false, message: 'AI/Admin Service Unavailable' }));
     });
 
     req.pipe(aiReq);

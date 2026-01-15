@@ -1,4 +1,4 @@
-const API = 'http://localhost:3002';
+const API = ''; // Relative path
 
 (function() {
   try {
