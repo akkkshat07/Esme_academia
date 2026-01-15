@@ -682,8 +682,16 @@
           
           if (!resp.ok) {
             removeTypingIndicator(typingId);
-            console.error('AI response error:', resp.status, resp.statusText);
-            appendAiMessage('bot', `Error (${resp.status}): ${resp.statusText}. Please check if the AI service is running.`);
+            const errText = await resp.text().catch(() => '');
+            console.error('AI response error:', resp.status, resp.statusText, errText);
+            
+             if (resp.status === 405) {
+                appendAiMessage('bot', `Proxy Error (405): The Frontend Server is not forwarding requests to the AI Server correctly. Please restart the Frontend Server.`);
+             } else if (resp.status === 404) {
+                 appendAiMessage('bot', `Error (404): AI Service not found. Connection failed.`);
+             } else {
+                 appendAiMessage('bot', `Error (${resp.status}): ${resp.statusText}. Please check logs.`);
+             }
             return;
           }
           
