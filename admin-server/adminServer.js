@@ -21,6 +21,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Logger Middleware
+app.use((req, res, next) => {
+  console.log(`[AdminServer] ${req.method} ${req.path}`);
+  next();
+});
+
 // ---------- Google Sheets (service account via PEM) ----------
 const pemPath = path.join(__dirname, process.env.PRIVATE_KEY_PATH || 'private_key.pem');
 let privateKey;

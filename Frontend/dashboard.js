@@ -751,6 +751,13 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email: user.email })
           });
+          
+          if (!resp.ok) {
+             const errText = await resp.text();
+             console.error("Create Session Error:", resp.status, errText);
+             throw new Error(`Server error ${resp.status}: ${errText.substring(0, 50)}`);
+          }
+
           const data = await resp.json();
           const newId = data.sessionId;
           
@@ -773,7 +780,15 @@
       try {
           const url = `${AI_SESSION_LIST_URL}?email=${encodeURIComponent(user.email)}`;
           const resp = await fetch(url);
-          const data = await resp.json();
+          if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+          const text = await resp.text();
+          let data;
+          try {
+             data = JSON.parse(text);
+          } catch (e) {
+             console.error("Failed to parse sessions JSON:", text.substring(0, 100));
+             throw new Error("Invalid server response (HTML)");
+          }
           renderSessionList(data.sessions || []);
       } catch (err) {
           console.error('Failed to load sessions', err);
