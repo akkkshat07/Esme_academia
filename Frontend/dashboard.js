@@ -987,7 +987,7 @@
     try {
       const leaderboard = await fetchJSON('/api/leaderboard');
       console.log('Leaderboard data received:', leaderboard);
-      renderLeaderboard(leaderboard);
+      renderLeaderboard(leaderboard.data);
     } catch (err) {
       console.error('leaderboard load error', err);
       leaderboardEl.innerHTML = `<p style="color:#c00">Failed to load leaderboard: ${err.message}</p>`;

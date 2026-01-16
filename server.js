@@ -151,15 +151,16 @@ async function refreshCache() {
     }
     const lb = [];
     stats.forEach((val, email) => {
+        const hours = Number((val.seconds / 3600).toFixed(2));
         lb.push({
           rank: 0,
           name: nameByEmail.get(email) || email,
-          points: Math.floor(val.seconds / 60), 
-          courses: val.courses.size,
+          hours: hours,
+          courseCount: val.courses.size,
           badges: []
         });
     });
-    lb.sort((a,b) => b.points - a.points);
+    lb.sort((a,b) => b.hours - a.hours);
     const top10 = lb.slice(0, 10);
     top10.forEach((x, i) => x.rank = i + 1);
     CACHE.leaderboard = top10;
