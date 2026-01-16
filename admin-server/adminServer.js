@@ -13,8 +13,7 @@ const { v4: uuidv4 } = require('uuid');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const MarkdownIt = require('markdown-it');
 
-const __filename = __filename || '';
-const __dirname = __dirname || path.dirname(require.main.filename);
+// __filename and __dirname are built-in in CommonJS
 
 const app = express();
 app.use(cors());
