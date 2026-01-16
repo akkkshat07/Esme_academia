@@ -1,14 +1,38 @@
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 // Configuration
-const TARGET_URL = 'http://localhost:3000/api/login'; // Adjust if testing a different endpoint
+const TARGET_URL = 'http://localhost:3000/api/login'; 
+const TARGET_HOST = 'localhost';
+const TARGET_PORT = 3000;
 const CONCURRENT_USERS = 250;
-const DURATION_SECONDS = 30; // How long to sustain the load
+const DURATION_SECONDS = 30; 
 
-const LOGIN_PAYLOAD = JSON.stringify({
-    emailOrPhone: "guest@company.com", // Use a valid test user
-    password: "123"
-});
+// Load Real Users from CSV
+const csvPath = path.join(__dirname, 'Esme-Learning-Academy(Do Not Delete) - Sheet1.csv');
+let TEST_USERS = [];
+
+try {
+    const data = fs.readFileSync(csvPath, 'utf8');
+    const lines = data.split('\n').slice(1); // Skip header
+    lines.forEach(line => {
+        const cols = line.split(',');
+        // empid=0, phone=1, email=3, password=5
+        if (cols.length > 5) {
+            const email = cols[3]?.trim();
+            const phone = cols[1]?.trim();
+            const password = cols[5]?.trim();
+            if ((email || phone) && password) {
+                TEST_USERS.push({ emailOrPhone: email || phone, password });
+            }
+        }
+    });
+    console.log(`✅ Loaded ${TEST_USERS.length} real users for testing.`);
+} catch (err) {
+    console.error('⚠️ Could not load CSV, falling back to guest user.', err.message);
+    TEST_USERS.push({ emailOrPhone: "guest@company.com", password: "123" });
+}
 
 console.log(`🚀 Starting Load Test via Proxy (Port 3000) -> Backend (Port 3001)`);
 console.log(`👥 Users: ${CONCURRENT_USERS}`);
@@ -23,26 +47,29 @@ let errors = {};
 function sendRequest() {
     activeRequests++;
     
+    // Pick random user
+    const user = TEST_USERS[Math.floor(Math.random() * TEST_USERS.length)];
+    
     // Randomize endpoint to simulate real traffic mix
     const rand = Math.random();
-    let path, method, payload;
+    let pathStr, method, payload; 
 
     if (rand < 0.3) {
         // 30% Traffic: Login
-        path = '/api/login';
+        pathStr = '/api/login';
         method = 'POST';
-        payload = LOGIN_PAYLOAD;
+        payload = JSON.stringify(user);
     } else if (rand < 0.6) {
         // 30% Traffic: Leaderboard (Cached)
-        path = '/api/leaderboard';
+        pathStr = '/api/leaderboard';
         method = 'GET';
     } else if (rand < 0.8) {
         // 20% Traffic: Courses (Cached)
-        path = '/api/courses/filter?language=English';
+        pathStr = '/api/courses/filter?language=English';
         method = 'GET';
     } else {
         // 20% Traffic: Quizzes (Cached)
-        path = '/api/quizzes';
+        pathStr = '/api/quizzes';
         method = 'GET';
     }
 
@@ -50,8 +77,8 @@ function sendRequest() {
 
     const opts = {
         hostname: 'localhost',
-        port: 3000, // Hit the frontend proxy to test the full chain
-        path: path,
+        port: 3000, 
+        path: pathStr,
         method: method,
         headers: {
             'Content-Type': 'application/json',
@@ -70,7 +97,7 @@ function sendRequest() {
                 successCount++;
             } else {
                 failCount++;
-                const key = `${res.statusCode} ${path}`;
+                const key = `${res.statusCode} ${pathStr}`;
                 errors[key] = (errors[key] || 0) + 1;
             }
         });
@@ -79,7 +106,7 @@ function sendRequest() {
     req.on('error', (e) => {
         activeRequests--;
         failCount++;
-        const key = `NET_ERR ${path}`;
+        const key = `NET_ERR ${pathStr}`;
         errors[key] = (errors[key] || 0) + 1;
     });
 

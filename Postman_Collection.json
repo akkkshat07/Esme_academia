@@ -1,0 +1,554 @@
+{
+  "info": {
+    "name": "Esme Learning Academy LMS API",
+    "description": "Complete API collection for testing all LMS endpoints with real user credentials",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login - Email/Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('auth_token', JSON.stringify(jsonData.user));",
+                  "    console.log('✅ Login Successful:', jsonData.user.name);",
+                  "} else {",
+                  "    console.log('❌ Login Failed:', pm.response.code, pm.response.text());",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailOrPhone\": \"neel.sharma@esmeconsumer.in\",\n  \"password\": \"Ns123456\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "login"]
+            }
+          }
+        },
+        {
+          "name": "Login - Phone/OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"9756093559\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/login-phone",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "login-phone"]
+            }
+          }
+        },
+        {
+          "name": "Login - Email/OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"neel.sharma@esmeconsumer.in\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/login-email",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "login-email"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Content Management",
+      "item": [
+        {
+          "name": "Get All Courses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "console.log('✅ Courses Retrieved:', jsonData.data.length, 'courses');",
+                  "pm.environment.set('courseCount', jsonData.data.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/courses",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "courses"]
+            }
+          }
+        },
+        {
+          "name": "Filter Courses by Language - English",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "console.log('✅ English Courses:', jsonData.data.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/courses/filter?language=English",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "courses", "filter"],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "English"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filter Courses by Language - Hindi",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/courses/filter?language=Hindi",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "courses", "filter"],
+              "query": [
+                {
+                  "key": "language",
+                  "value": "Hindi"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Assigned Courses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "console.log('✅ Assigned Courses:', jsonData.data.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/assigned?email=neel.sharma@esmeconsumer.in",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "assigned"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "neel.sharma@esmeconsumer.in"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leaderboard & Analytics",
+      "item": [
+        {
+          "name": "Get Leaderboard (Top 10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "console.log('✅ Leaderboard Data:');",
+                  "jsonData.data.slice(0, 3).forEach((user, idx) => {",
+                  "    console.log((idx+1) + '. ' + user.name + ' - Points: ' + user.points);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/leaderboard",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "leaderboard"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quiz Management",
+      "item": [
+        {
+          "name": "Get All Quizzes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "console.log('✅ Quizzes Retrieved:', jsonData.data.length, 'quizzes');",
+                  "pm.environment.set('quizCount', jsonData.data.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/quizzes",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "quizzes"]
+            }
+          }
+        },
+        {
+          "name": "Get Quiz Master List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/quiz-master",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "quiz-master"]
+            }
+          }
+        },
+        {
+          "name": "Get Assigned Quizzes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/assigned-quizzes?email=neel.sharma@esmeconsumer.in",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "assigned-quizzes"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "neel.sharma@esmeconsumer.in"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Completions & Tracking",
+      "item": [
+        {
+          "name": "Record Course Completion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"neel.sharma@esmeconsumer.in\",\n  \"videoTitle\": \"Sample Course 1\",\n  \"watchedSeconds\": 3600,\n  \"autoUpdate\": true,\n  \"status\": \"completed\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/completions",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "completions"]
+            }
+          }
+        },
+        {
+          "name": "Get User Completions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/completions?email=neel.sharma@esmeconsumer.in",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "completions"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "neel.sharma@esmeconsumer.in"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Backend Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "console.log('✅ Backend Status:', jsonData.ok ? 'HEALTHY' : 'DOWN');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/api/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3001",
+              "path": ["api", "health"]
+            }
+          }
+        },
+        {
+          "name": "Frontend Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "console.log('✅ Frontend is responding');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": [""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Batch Test Scenarios",
+      "item": [
+        {
+          "name": "Complete User Flow (Login → Courses → Leaderboard)",
+          "item": [
+            {
+              "name": "1. Login User",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"emailOrPhone\": \"akshay@samaracapital.com\",\n  \"password\": \"Xb84563\"\n}"
+                },
+                "url": {
+                  "raw": "http://localhost:3000/api/login",
+                  "protocol": "http",
+                  "host": ["localhost"],
+                  "port": "3000",
+                  "path": ["api", "login"]
+                }
+              }
+            },
+            {
+              "name": "2. Get Assigned Courses",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "http://localhost:3000/api/assigned?email=akshay@samaracapital.com",
+                  "protocol": "http",
+                  "host": ["localhost"],
+                  "port": "3000",
+                  "path": ["api", "assigned"],
+                  "query": [
+                    {
+                      "key": "email",
+                      "value": "akshay@samaracapital.com"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "3. Check Leaderboard",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "http://localhost:3000/api/leaderboard",
+                  "protocol": "http",
+                  "host": ["localhost"],
+                  "port": "3000",
+                  "path": ["api", "leaderboard"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content Discovery Flow",
+          "item": [
+            {
+              "name": "1. Get All Courses",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "http://localhost:3000/api/courses",
+                  "protocol": "http",
+                  "host": ["localhost"],
+                  "port": "3000",
+                  "path": ["api", "courses"]
+                }
+              }
+            },
+            {
+              "name": "2. Filter by Language",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "http://localhost:3000/api/courses/filter?language=English",
+                  "protocol": "http",
+                  "host": ["localhost"],
+                  "port": "3000",
+                  "path": ["api", "courses", "filter"],
+                  "query": [
+                    {
+                      "key": "language",
+                      "value": "English"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "3. Get Quizzes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "http://localhost:3000/api/quizzes",
+                  "protocol": "http",
+                  "host": ["localhost"],
+                  "port": "3000",
+                  "path": ["api", "quizzes"]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "courseCount",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "quizCount",
+      "value": "0",
+      "type": "string"
+    }
+  ]
+}

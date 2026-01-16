@@ -65,6 +65,8 @@ const CACHE = {
   users: [],
   courses: [],
   quizzes: [],
+  assignedCourses: [],
+  assignedQuizzes: [],
   leaderboard: [],
   lastRefreshed: 0
 };
@@ -75,10 +77,12 @@ async function refreshCache() {
     const sheets = await sheetsClient();
     
     // Parallel Fetch for maximum speed
-    const [users, courses, quizzes, completions] = await Promise.all([
+    const [users, courses, quizzes, assigned, assignedQuizzes, completions] = await Promise.all([
       sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Sheet1!A2:K' }),
       sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Courses!A2:J' }),
       sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Quizzes!A2:D' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'AssignedCourses!A2:I' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'AssignedQuizzes!A2:I' }),
       sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Completions!A2:J' })
     ]);
 
@@ -101,7 +105,33 @@ async function refreshCache() {
       quiz_id: r[0] || '', quiz_title: r[1] || '', category: r[2] || '', form_url: r[3] || ''
     })).filter(q => q.quiz_id && q.quiz_title);
 
-    // 4. Leaderboard
+    // 4. Assigned Courses (NEW)
+    const assignedRows = assigned.data.values || [];
+    CACHE.assignedCourses = assignedRows.map(r => ({
+      email: (r[0] || '').trim().toLowerCase(),
+      phone: String(r[1] || '').replace(/[^\d]/g, ''),
+      videoTitle: String(r[2] || '').trim(),
+      mainCategory: String(r[3] || '').trim(),
+      subcategory: String(r[4] || '').trim(),
+      due_date: String(r[5] || '').trim(),
+      status: String(r[6] || '').trim() || 'Assigned',
+      assigned_by: String(r[7] || '').trim(),
+      courseUrl: String(r[8] || '').trim()
+    }));
+
+    // 5. Assigned Quizzes (NEW)
+    const assignedQuizRows = assignedQuizzes.data.values || [];
+    CACHE.assignedQuizzes = assignedQuizRows.map(r => ({
+      email: String(r[0] || '').trim().toLowerCase(),
+      phone: String(r[1] || '').replace(/[^\d]/g, ''),
+      quiz_id: String(r[2] || '').trim(),
+      quiz_title: String(r[3] || '').trim(),
+      due_date: String(r[4] || '').trim(),
+      status: String(r[5] || '').trim(),
+      assigned_by: String(r[6] || '').trim()
+    }));
+
+    // 6. Leaderboard
     const compRows = completions.data.values || [];
     const nameByEmail = new Map();
     CACHE.users.forEach(r => {
@@ -135,7 +165,7 @@ async function refreshCache() {
     CACHE.leaderboard = top10;
 
     CACHE.lastRefreshed = Date.now();
-    console.log(`[Cache] Refresh Success. Users: ${CACHE.users.length}, Courses: ${CACHE.courses.length}, Leaderboard: ${CACHE.leaderboard.length}`);
+    console.log(`[Cache] Refresh Success. Users: ${CACHE.users.length}, Courses: ${CACHE.courses.length}, Quizzes: ${CACHE.quizzes.length}, Assigned Courses: ${CACHE.assignedCourses.length}, Assigned Quizzes: ${CACHE.assignedQuizzes.length}, Leaderboard: ${CACHE.leaderboard.length}`);
   } catch(e) {
     console.error('[Cache] Refresh FAILED:', e.message);
   }
@@ -600,89 +630,37 @@ app.get('/api/courses/filter', async (req, res) => {
 });
 
 // ---------- GET /api/assigned?email=... (email OR phone) ----------
-// AssignedCourses layout:
-// A Email
-// B Phone
-// C Video Title
-// D Main Category
-// E Subcategory
-// F due_date
-// G status
-// H assigned_by
-// I course_url  (direct video URL; if blank, falls back to Courses sheet)
+// Serves from CACHE ONLY - Zero Latency
 app.get('/api/assigned', async (req, res) => {
   try {
     const qRaw = String(req.query.email || '').trim();
     if (!qRaw) {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'Missing email/phone' });
+      return res.status(400).json({ ok: false, message: 'Missing email/phone' });
     }
 
     const qLower = qRaw.toLowerCase();
     const qPhone = normPhone(qRaw);
     const qIsPhone = !isEmail(qRaw) && qPhone.length >= 6;
 
-    const sheets = await sheetsClient();
-
-    const [coursesRsp, assignRsp] = await Promise.all([
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SHEET_ID,
-        range: 'Courses!A2:J'
-      }),
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SHEET_ID,
-        range: 'AssignedCourses!A2:I'
-      })
-    ]);
-
-    // Build lookup for courses by Video Title (case-insensitive)
-    const coursesRows = coursesRsp.data.values || [];
+    // Build lookup for courses by Video Title (case-insensitive) from CACHE
     const courseByTitle = new Map();
-    for (const r of coursesRows) {
-      const mainCategory = r[0] || '';
-      const subcategory = r[1] || '';
-      const topic = r[2] || '';
-      const title = (r[3] || '').trim();
-      const description = r[4] || '';
-      const url = r[5] || '';
-      const duration_seconds = Number(r[6] || 0);
-      const type = (r[7] || 'video').toLowerCase();
-      const thumbnailUrl = r[8] || '';
-      const downloadAllowed = /^y(es)?$/i.test(String(r[9] || '').trim());
+    for (const r of CACHE.courses) {
+      const title = (r.title || '').trim();
       if (title) {
-        courseByTitle.set(title.toLowerCase(), {
-          mainCategory,
-          subcategory,
-          topic,
-          title,
-          description,
-          url,
-          duration_seconds,
-          type,
-          thumbnailUrl,
-          downloadAllowed
-        });
+        courseByTitle.set(title.toLowerCase(), r);
       }
     }
 
-    const assignRows = assignRsp.data.values || [];
+    // Filter assigned courses for this user from CACHE
     const assigned = [];
-
-    for (const r of assignRows) {
-      const email = String(r[0] || '').trim().toLowerCase();
-      const phone = normPhone(r[1] || '');
-      const videoTitle = String(r[2] || '').trim();
-      const sheetMainCat = String(r[3] || '').trim();
-      const sheetSubcat = String(r[4] || '').trim();
-      const due_date = String(r[5] || '').trim();
-      const status = String(r[6] || '').trim() || 'Assigned';
-      // r[7] assigned_by is ignored here
-      const courseUrl = String(r[8] || '').trim(); // I course_url
+    for (const row of CACHE.assignedCourses) {
+      const email = row.email || '';
+      const phone = row.phone || '';
+      const videoTitle = row.videoTitle || '';
 
       if (!videoTitle) continue;
 
-      // match this row to current user
+      // Match this row to current user
       let match = false;
       if (qIsPhone) {
         match = phone && (phone === qPhone || phone.endsWith(qPhone));
@@ -691,21 +669,22 @@ app.get('/api/assigned', async (req, res) => {
       }
       if (!match) continue;
 
+      // Merge with course data from cache
       const base = courseByTitle.get(videoTitle.toLowerCase()) || {};
 
       const course = {
-        mainCategory: sheetMainCat || base.mainCategory || '',
-        subcategory: sheetSubcat || base.subcategory || '',
+        mainCategory: row.mainCategory || base.mainCategory || '',
+        subcategory: row.subcategory || base.subcategory || '',
         topic: base.topic || '',
         title: videoTitle,
         description: base.description || '',
-        url: courseUrl || base.url || '',
+        url: row.courseUrl || base.url || '',
         duration_seconds: base.duration_seconds || 0,
         type: base.type || 'video',
         thumbnailUrl: base.thumbnailUrl || '',
         downloadAllowed: !!base.downloadAllowed,
-        due_date,
-        status,
+        due_date: row.due_date,
+        status: row.status,
         assigned: true
       };
 
@@ -787,65 +766,41 @@ app.get('/api/quizzes', async (req, res) => {
 });
 
 // ---------- GET /api/assigned-quizzes ----------
+// Serves from CACHE ONLY - Zero Latency
 app.get('/api/assigned-quizzes', async (req, res) => {
   try {
     const q = String(req.query.email || '').trim().toLowerCase();
     if (!q) return res.status(400).json({ ok: false, message: 'Missing email/phone' });
 
-    const sheets = await sheetsClient();
-
-    const [quizMasterRsp, assignedRsp] = await Promise.all([
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SHEET_ID,
-        range: 'Quizzes!A2:D'
-      }),
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SHEET_ID,
-        range: 'AssignedQuizzes!A2:I'
-      })
-    ]);
-
-    const quizRows = quizMasterRsp.data.values || [];
-    const assignedRows = assignedRsp.data.values || [];
-
-    // quiz_id -> quiz meta
+    // Build quiz master lookup from cache
     const byId = new Map();
-    for (const r of quizRows) {
-      const id = (r[0] || '').trim();
-      if (!id) continue;
-      byId.set(id, {
-        quiz_id: id,
-        quiz_title: r[1] || '',
-        category:   r[2] || '',
-        form_url:   r[3] || ''
-      });
+    for (const r of CACHE.quizzes) {
+      byId.set(r.quiz_id, r);
     }
 
     const qIsPhone = /^\d{6,}$/.test(q);
     const result = [];
 
-    for (const r of assignedRows) {
-      const email = String(r[0] || '').trim().toLowerCase(); // A Email
-      const phone = String(r[1] || '').replace(/[^\d]/g, ''); // B Phone
-      const quiz_id   = (r[2] || '').trim();                  // C quiz_id
-      const quiz_title = (r[3] || '').trim();                 // D title
-      const due_date  = (r[4] || '').trim();                  // E due_date
-      const status    = (r[5] || '').trim();                  // F status
+    // Filter assigned quizzes from cache
+    for (const row of CACHE.assignedQuizzes) {
+      const email = row.email || '';
+      const phone = row.phone || '';
+      const quiz_id = row.quiz_id || '';
 
       const match = qIsPhone ? (phone && phone.endsWith(q)) : (email && email === q);
       if (!match) continue;
 
       const meta = byId.get(quiz_id) || {
         quiz_id,
-        quiz_title,
+        quiz_title: row.quiz_title,
         category: '',
         form_url: ''
       };
 
       result.push({
         ...meta,
-        due_date,
-        status
+        due_date: row.due_date,
+        status: row.status
       });
     }
 
