@@ -880,6 +880,50 @@ app.post('/api/track', async (req, res) => {
   }
 });
 
+// ---------- GET /api/completions  (retrieve completion records) ----------
+app.get('/api/completions', async (req, res) => {
+  try {
+    const email = (req.query.email || '').trim().toLowerCase();
+    
+    if (!email) {
+      return res.status(400).json({ ok: false, message: 'Missing email query parameter' });
+    }
+
+    const sheets = await sheetsClient();
+    const resp = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SHEET_ID,
+      range: 'Completions!A2:J'
+    });
+
+    const rows = resp.data.values || [];
+    const completions = rows
+      .filter(r => (r[1] || '').trim().toLowerCase() === email)
+      .map((r, idx) => ({
+        id: idx,
+        timestamp: r[0] || '',
+        email: r[1] || '',
+        title: r[2] || '',
+        category: r[3] || '',
+        watchedSeconds: Number(r[4] || 0),
+        autoCompleted: r[5] || 'FALSE',
+        status: r[6] || 'Partial',
+        lastPosition: Number(r[7] || 0),
+        percentWatched: Number(r[8] || 0),
+        lastSeenAt: r[9] || ''
+      }));
+
+    res.json({ 
+      ok: true, 
+      data: completions,
+      count: completions.length,
+      totalHours: (completions.reduce((sum, c) => sum + c.watchedSeconds, 0) / 3600).toFixed(2)
+    });
+  } catch (e) {
+    console.error('GET /api/completions error:', e);
+    res.status(500).json({ ok: false, message: 'Failed to fetch completions' });
+  }
+});
+
 // ---------- Start ----------
 const PORT = Number(process.env.PORT || 3001);
 app.listen(PORT, () => {
