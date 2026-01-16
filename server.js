@@ -157,12 +157,17 @@ async function refreshCache() {
           name: nameByEmail.get(email) || email,
           hours: hours,
           courseCount: val.courses.size,
-          badges: []
+          medal: '' // Will be set for top 3
         });
     });
     lb.sort((a,b) => b.hours - a.hours);
     const top10 = lb.slice(0, 10);
-    top10.forEach((x, i) => x.rank = i + 1);
+    top10.forEach((x, i) => {
+      x.rank = i + 1;
+      if (i === 0) x.medal = 'gold';
+      else if (i === 1) x.medal = 'silver';
+      else if (i === 2) x.medal = 'bronze';
+    });
     CACHE.leaderboard = top10;
 
     CACHE.lastRefreshed = Date.now();
