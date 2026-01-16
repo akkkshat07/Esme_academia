@@ -57,6 +57,12 @@
     const duration = state.duration || videoEl.duration || 1;
     const realPercent = percent(state.actualWatchedTime, duration);
 
+    // Only allow "Completed" if watched at least 65% of actual play time
+    if (status === 'Completed' && realPercent < 65) {
+      console.log('Tracking: Partial (only watched ' + realPercent + '% - need 65%)');
+      status = 'Partial';
+    }
+
     const payload = {
       email,
       title,
@@ -76,6 +82,11 @@
       });
       if (progressPill) progressPill.textContent = `${payload.percent_watched}% watched`;
       console.log('Tracking:', status, payload);
+      
+      // Mark as completed only if truly completed
+      if (status === 'Completed') {
+        state.completedSent = true;
+      }
     } catch (e) {
       console.warn('track failed', e);
     }
@@ -101,16 +112,16 @@
     state.lastPos = currentPos;
   });
 
-  // Detect skip/seek ? partial completion
+  // Detect skip/seek ? partial completion (only once)
   videoEl.addEventListener('seeking', () => {
     state.lastPos = videoEl.currentTime; // Reset lastPos on seek to stop counting jump
     if (!state.completedSent) send('Partial');
   });
 
-  // Video ends naturally ? full completion
+  // Video ends naturally ? check if truly watched enough
   videoEl.addEventListener('ended', () => {
     if (!state.completedSent) {
-      // Backend will still check if it's actually 65%
+      // send() will verify if actually watched 65% before marking as Completed
       send('Completed');
     }
   });
