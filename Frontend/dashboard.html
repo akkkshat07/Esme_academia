@@ -27,8 +27,8 @@
       </div>
       <nav class="sidebar-nav">
         <ul>
-          <li id="tab-all">All Courses</li>
-          <li id="tab-assigned" class="active">Assigned Courses</li>
+          <li id="tab-all" class="active">All Courses</li>
+          <li id="tab-assigned">Assigned Courses</li>
           <li id="tab-ai-mentor">Esme AI Mentor</li>
           <li id="tab-quizzes">Quizzes</li>
           <li id="tab-leaderboard">Leaderboard</li>
@@ -39,10 +39,10 @@
     </aside>
 
     <main class="dashboard-content">
-      <section id="panel-all" class="panel">
+      <section id="panel-all" class="panel panel--active">
         <header class="dashboard-header">
           <div class="header-left">
-            <h1>All Courses</h1>
+            <h1>Welcome, <span id="user-name">User</span>!</h1>
             <p>Browse all available courses in our catalog.</p>
           </div>
           <div class="header-right">
@@ -68,10 +68,10 @@
         <div id="all-area" class="courses-grid"></div>
       </section>
 
-      <section id="panel-assigned" class="panel panel--active">
+      <section id="panel-assigned" class="panel hidden">
         <header class="dashboard-header">
           <div class="header-left">
-            <h1>Welcome, <span id="user-name">User</span>!</h1>
+            <h1>Assigned Courses</h1>
             <p>Here are your assigned courses.</p>
           </div>
           <div class="header-right">

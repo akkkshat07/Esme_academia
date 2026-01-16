@@ -22,11 +22,11 @@
   const aiChatForm     = $('#ai-chat-form');
   const aiChatInput    = $('#ai-chat-input');
   const aiChatMessages = $('#ai-chat-messages');
-  // AI APIs are proxied via /ai/... by the frontend server
-  const AI_API_URL     = '/ai/chat';
-  const AI_HISTORY_URL  = '/ai/history';
-  const AI_SESSION_LIST_URL = '/ai/sessions';
-  const AI_CREATE_SESSION_URL = '/ai/session';
+  // AI APIs are proxied via /api/ai/... to avoid NGINX 405 on /ai/
+  const AI_API_URL     = '/api/ai/chat';
+  const AI_HISTORY_URL  = '/api/ai/history';
+  const AI_SESSION_LIST_URL = '/api/ai/sessions';
+  const AI_CREATE_SESSION_URL = '/api/ai/session';
 
   const sidebar    = $('#sidebar');
   const backdrop   = $('#sidebar-backdrop');
@@ -1053,7 +1053,7 @@
     // Restore tab
     let tabToShow = currentTab;
     if (!tabToShow) {
-      tabToShow = 'assigned'; // Default to assigned courses
+      tabToShow = 'all'; // Default to all courses
     }
     console.log('Setting active tab to:', tabToShow);
     setActiveTab(tabToShow);

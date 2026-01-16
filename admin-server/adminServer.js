@@ -302,7 +302,7 @@ const upload = multer({
 app.get('/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // AI Chat Endpoint
-app.post('/ai/chat', async (req, res) => {
+app.post('/api/ai/chat', async (req, res) => {
   const { message, email, sessionId } = req.body || {};
   if (!message) return res.json({ reply: "I'm listening..." });
   
@@ -400,7 +400,7 @@ PERSONALIZATION GUIDELINES:
 });
 
 // Endpoint: Health Check for AI Service
-app.get('/ai/health', (req, res) => {
+app.get('/api/ai/health', (req, res) => {
   res.json({
     ok: true,
     status: 'AI service running',
@@ -411,7 +411,7 @@ app.get('/ai/health', (req, res) => {
 });
 
 // Endpoint: Get list of sessions for a user
-app.get('/ai/sessions', (req, res) => {
+app.get('/api/ai/sessions', (req, res) => {
   const { email } = req.query;
   if (!email) return res.json({ sessions: [] });
   
@@ -434,9 +434,9 @@ app.get('/ai/sessions', (req, res) => {
 });
 
 // Endpoint: Get specific session history
-app.get('/ai/history', (req, res) => {
+app.get('/api/ai/history', (req, res) => {
   const { sessionId } = req.query;
-  console.log(`[GET /ai/history] Request for sessionId: ${sessionId}`);
+  console.log(`[GET /api/ai/history] Request for sessionId: ${sessionId}`);
   
   const session = conversationHistories.get(sessionId);
   if (!session) {
@@ -456,9 +456,9 @@ app.get('/ai/history', (req, res) => {
 });
 
 // Endpoint: Delete a session
-app.delete('/ai/session/:sessionId', (req, res) => {
+app.delete('/api/ai/session/:sessionId', (req, res) => {
   const { sessionId } = req.params;
-  console.log(`[DELETE /ai/session] Deleting session: ${sessionId}`);
+  console.log(`[DELETE /api/ai/session] Deleting session: ${sessionId}`);
   
   if (conversationHistories.has(sessionId)) {
       conversationHistories.delete(sessionId);
@@ -472,7 +472,7 @@ app.delete('/ai/session/:sessionId', (req, res) => {
 });
 
 // Endpoint: Create new session
-app.post('/ai/session', (req, res) => {
+app.post('/api/ai/session', (req, res) => {
    const { email } = req.body;
    const newId = uuidv4();
    getOrCreateSession(newId, email); 

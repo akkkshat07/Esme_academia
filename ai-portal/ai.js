@@ -55,7 +55,7 @@ document.getElementById('chat-form').onsubmit = async (e) => {
   scrollToBottom();
 
   try {
-    const r = await fetch(`${API}/ai/chat`, { 
+    const r = await fetch(`${API}/api/ai/chat`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ email, sessionId, message: text }) 

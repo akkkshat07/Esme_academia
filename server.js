@@ -229,6 +229,8 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ ok: false, message: 'Invalid password' });
     }
 
+    console.log(`[AUTH] Login Success: ${user._parsed.email} (${user._parsed.name})`);
+
     res.json({
       ok: true,
       user: {
@@ -277,6 +279,8 @@ app.post('/api/login-phone', async (req, res) => {
       return res.status(401).json({ ok: false, message: 'User not found' });
     }
 
+    console.log(`[AUTH] Phone Login Success: ${user._parsed.phone} (${user._parsed.name})`);
+
     res.json({
       ok: true,
       user: {
@@ -322,6 +326,8 @@ app.post('/api/login-email', async (req, res) => {
     if (!user || !user._parsed) {
       return res.status(401).json({ ok: false, message: 'User not found' });
     }
+
+    console.log(`[AUTH] Email Login Success: ${user._parsed.email} (${user._parsed.name})`);
 
     res.json({
       ok: true,

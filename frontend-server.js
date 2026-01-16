@@ -41,6 +41,35 @@ const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url, true);
   let pathname = parsedUrl.pathname;
 
+  // Proxy specific AI endpoints that are under /api/ai/ to the AI/Admin server (Port 3002)
+  // This bypasses potential NGINX blocks on /ai/ by piggybacking on /api/
+  if (pathname.startsWith('/api/ai/')) {
+    const aiPath = pathname + (parsedUrl.search || '');
+    const aiOptions = {
+      hostname: API_HOST,
+      port: AI_PORT,
+      path: aiPath,
+      method: req.method,
+      headers: req.headers
+    };
+
+    delete aiOptions.headers.host;
+
+    const aiReq = http.request(aiOptions, (aiRes) => {
+      res.writeHead(aiRes.statusCode, aiRes.headers);
+      aiRes.pipe(res);
+    });
+
+    aiReq.on('error', (err) => {
+      console.error('AI API proxy error:', err);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, message: 'AI Service Unavailable' }));
+    });
+
+    req.pipe(aiReq);
+    return;
+  }
+
   // Proxy API requests to backend
   if (pathname.startsWith('/api/')) {
     const apiPath = pathname + (parsedUrl.search || '');
