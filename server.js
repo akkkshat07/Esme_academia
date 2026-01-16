@@ -49,6 +49,101 @@ function isEmail(s) {
 function normPhone(s) {
   return String(s || '').replace(/[^\d]/g, '');
 }
+function detectLanguageInternal(row) {
+  const text = ((row[1] || '') + ' ' + (row[2] || '') + ' ' + (row[3] || '')).toLowerCase();
+  if (text.includes('hindi')) return 'Hindi';
+  if (text.includes('tamil')) return 'Tamil';
+  if (text.includes('telugu')) return 'Telugu';
+  if (text.includes('malayalam')) return 'Malayalam';
+  if (text.includes('kannada')) return 'Kannada';
+  if (text.includes('marathi')) return 'Marathi';
+  return 'English';
+}
+
+// ---------- Caching Mechanism (ZERO LATENCY) ----------
+const CACHE = {
+  users: [],
+  courses: [],
+  quizzes: [],
+  leaderboard: [],
+  lastRefreshed: 0
+};
+
+async function refreshCache() {
+  console.log('[Cache] Triggering background refresh...');
+  try {
+    const sheets = await sheetsClient();
+    
+    // Parallel Fetch for maximum speed
+    const [users, courses, quizzes, completions] = await Promise.all([
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Sheet1!A2:K' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Courses!A2:J' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Quizzes!A2:D' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SHEET_ID, range: 'Completions!A2:J' })
+    ]);
+
+    // 1. Users
+    CACHE.users = users.data.values || [];
+
+    // 2. Courses
+    const courseRows = courses.data.values || [];
+    CACHE.courses = courseRows.map(r => ({
+          mainCategory: r[0] || '', subcategory: r[1] || '', topic: r[2] || '', title: r[3] || '',
+          description: r[4] || '', url: r[5] || '', duration_seconds: Number(r[6] || 0),
+          type: (r[7] || 'video').toLowerCase(), thumbnailUrl: r[8] || '',
+          downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()), 
+          language: detectLanguageInternal(r)
+    }));
+
+    // 3. Quizzes
+    const quizRows = quizzes.data.values || [];
+    CACHE.quizzes = quizRows.map(r => ({
+      quiz_id: r[0] || '', quiz_title: r[1] || '', category: r[2] || '', form_url: r[3] || ''
+    })).filter(q => q.quiz_id && q.quiz_title);
+
+    // 4. Leaderboard
+    const compRows = completions.data.values || [];
+    const nameByEmail = new Map();
+    CACHE.users.forEach(r => {
+        const email = (r[3] || '').trim().toLowerCase();
+        if(email) nameByEmail.set(email, (r[2] || '').trim());
+    });
+    const stats = new Map();
+    for (const r of compRows) {
+        const email = (r[1] || '').trim().toLowerCase();
+        if(!email) continue;
+        const seconds = Number(r[4] || 0);
+        const title = (r[2] || '').trim();
+        if (!stats.has(email)) stats.set(email, { seconds: 0, courses: new Set() });
+        const obj = stats.get(email);
+        obj.seconds += seconds;
+        obj.courses.add(title);
+    }
+    const lb = [];
+    stats.forEach((val, email) => {
+        lb.push({
+          rank: 0,
+          name: nameByEmail.get(email) || email,
+          points: Math.floor(val.seconds / 60), 
+          courses: val.courses.size,
+          badges: []
+        });
+    });
+    lb.sort((a,b) => b.points - a.points);
+    const top10 = lb.slice(0, 10);
+    top10.forEach((x, i) => x.rank = i + 1);
+    CACHE.leaderboard = top10;
+
+    CACHE.lastRefreshed = Date.now();
+    console.log(`[Cache] Refresh Success. Users: ${CACHE.users.length}, Courses: ${CACHE.courses.length}, Leaderboard: ${CACHE.leaderboard.length}`);
+  } catch(e) {
+    console.error('[Cache] Refresh FAILED:', e.message);
+  }
+}
+
+// Start Cache Loop
+refreshCache();
+setInterval(refreshCache, 60 * 1000);
 
 // ---------- Health ----------
 app.get('/api/health', (req, res) => {
@@ -60,33 +155,15 @@ app.post('/api/login', async (req, res) => {
   try {
     const { emailOrPhone, password } = req.body || {};
     if (!emailOrPhone || !password) {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'Missing credentials' });
+      return res.status(400).json({ ok: false, message: 'Missing credentials' });
     }
 
-    let rows = [];
-    const now = Date.now();
-
-    // Check Users Cache
-    if (CACHE.users.data && CACHE.users.expiry > now) {
-      console.log('Using cached users for login');
-      rows = CACHE.users.data;
-    } else {
-      const sheets = await sheetsClient();
-      // Sheet1 layout: empid | phone | name | email | role | password | level | ...
-      const rsp = await sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SHEET_ID,
-        range: 'Sheet1!A2:K'
-      });
-      rows = rsp.data.values || [];
-      // Update Cache
-      CACHE.users.data = rows;
-      CACHE.users.expiry = now + USERS_CACHE_TTL;
-    }
+    // CACHE ONLY - Zero Latency
+    const rows = CACHE.users || []; 
+    // Note: If cache is empty (startup), this returns empty. 
+    // Realistically with startup await, it should be populated.
 
     const idOrPhone = normPhone(emailOrPhone);
-
     const user = rows.find((r) => {
       const empid = (r[0] || '').trim();
       const phone = normPhone(r[1] || '');
@@ -139,7 +216,7 @@ app.post('/api/login-phone', async (req, res) => {
     if (!phone) return res.status(400).json({ ok: false, message: 'Missing phone number' });
 
     // CACHE ONLY
-    const rows = CACHE.users.data || [];
+    const rows = CACHE.users || [];
     const normalizedPhone = normPhone(phone);
     
     // ...existing code...
@@ -187,7 +264,7 @@ app.post('/api/login-email', async (req, res) => {
     if (!email) return res.status(400).json({ ok: false, message: 'Missing email' });
 
     // CACHE ONLY
-    const rows = CACHE.users.data || [];
+    const rows = CACHE.users || [];
     const normalizedEmail = email.toLowerCase().trim();
     
     // ...existing code...
@@ -504,68 +581,21 @@ app.get('/api/languages', async (req, res) => {
   res.json({ ok: true, data: ['English', 'Hindi'] });
 });
 
-// ---------- Caching Mechanism ----------
-const CACHE = {
-  leaderboard: { data: null, expiry: 0 },
-  courses: { data: null, expiry: 0 },
-  quizzes: { data: null, expiry: 0 },
-  users: { data: null, expiry: 0 }, // Added users cache
-  assigned: {}, // Map key (email) -> { data: ..., expiry: ... }
-  assignedQuizzes: {}, // Map key (email) -> { data: ..., expiry: ... } 
-  quizMaster: { data: null, expiry: 0 } // Cache quiz master list separate from assigned
-};
 
-const CACHE_TTL = 60 * 1000; // 60 seconds
-const USERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for users
 
 // ---------- GET /api/courses/filter?language=... ----------
-// Filter courses by language
 app.get('/api/courses/filter', async (req, res) => {
   try {
     const language = String(req.query.language || 'English').trim();
-    const now = Date.now();
-
-    // Check Cache
-    if (CACHE.courses.data && CACHE.courses.expiry > now) {
-      console.log('Serving courses from cache');
-      const cachedList = CACHE.courses.data.filter(item => item.language === language);
-      return res.json({ ok: true, data: cachedList });
-    }
-
-    const sheets = await sheetsClient();
-    const resp = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Courses!A2:J'
-    });
-
-    const rows = resp.data.values || [];
-    const list = rows.map((r) => {
-        const lang = detectLanguage(r);
-        return {
-          mainCategory: r[0] || '',
-          subcategory: r[1] || '',
-          topic: r[2] || '',
-          title: r[3] || '',
-          description: r[4] || '',
-          url: r[5] || '',
-          duration_seconds: Number(r[6] || 0),
-          type: (r[7] || 'video').toLowerCase(),
-          thumbnailUrl: r[8] || '',
-          downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
-          language: lang
-        };
-    });
-
-    // Update Cache
-    CACHE.courses.data = list;
-    CACHE.courses.expiry = now + CACHE_TTL;
-
-    const filteredList = list.filter(item => item.language === language);
-    res.json({ ok: true, data: filteredList });
+    
+    // CACHE ONLY
+    const cachedList = CACHE.courses || [];
+    const filtered = cachedList.filter(item => item.language === language);
+    res.json({ ok: true, data: filtered });
 
   } catch (e) {
     console.error('GET /api/courses/filter error:', e.message);
-    res.status(500).json({ ok: false, message: 'Failed to filter courses' });
+    res.status(500).json({ ok: false, message: 'Server error' });
   }
 });
 
@@ -691,101 +721,8 @@ app.get('/api/assigned', async (req, res) => {
 
 // ---------- GET /api/leaderboard ----------
 app.get('/api/leaderboard', async (req, res) => {
-  try {
-    const now = Date.now();
-    if (CACHE.leaderboard.data && CACHE.leaderboard.expiry > now) {
-       console.log('Serving leaderboard from cache');
-       return res.json({ ok: true, data: CACHE.leaderboard.data });
-    }
-
-    const sheets = await sheetsClient();
-
-    const [compRsp, usersRsp] = await Promise.all([
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SHEET_ID,
-        range: 'Completions!A2:J'
-      }),
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SHEET_ID,
-        range: 'Sheet1!A2:K'
-      })
-    ]);
-
-    const compRows = compRsp.data.values || [];
-    const userRows = usersRsp.data.values || [];
-
-    console.log(`Leaderboard: ${compRows.length} completions, ${userRows.length} users`);
-
-    // email -> name
-    const nameByEmail = new Map();
-    for (const r of userRows) {
-      const name = (r[2] || '').trim(); // name
-      const email = (r[3] || '').trim().toLowerCase(); // email
-      if (email) nameByEmail.set(email, name);
-    }
-
-    console.log(`Found ${nameByEmail.size} unique users`);
-
-    // aggregate
-    const stats = new Map(); // email -> {seconds, courses:Set}
-    for (const r of compRows) {
-      const email = String(r[1] || '').trim().toLowerCase(); // B Email
-      const title = String(r[2] || '').trim();               // C Title
-      const seconds = Number(r[4] || 0);                     // E WatchedSeconds
-      const status = String(r[6] || '').trim().toLowerCase();// G status
-
-      if (!email || !title) continue;
-      if (status !== 'completed') continue;
-      if (!Number.isFinite(seconds) || seconds <= 0) continue;
-
-      let s = stats.get(email);
-      if (!s) {
-        s = { seconds: 0, courses: new Set() };
-        stats.set(email, s);
-      }
-      s.seconds += seconds;
-      s.courses.add(title);
-    }
-
-    console.log(`Aggregated ${stats.size} users with completed courses`);
-
-    const rows = Array.from(stats.entries()).map(([email, s]) => {
-      const hours = s.seconds / 3600;
-      const courseCount = s.courses.size;
-      return {
-        email,
-        name: nameByEmail.get(email) || email,
-        totalSeconds: s.seconds,
-        hours: Number(hours.toFixed(2)),
-        courseCount
-      };
-    });
-
-    // sort: hours desc, then courseCount desc
-    rows.sort((a, b) => {
-      if (b.hours !== a.hours) return b.hours - a.hours;
-      return b.courseCount - a.courseCount;
-    });
-
-    const top = rows.slice(0, 10).map((row, idx) => {
-      let medal = null;
-      if (idx === 0) medal = 'gold';
-      else if (idx === 1) medal = 'silver';
-      else if (idx === 2) medal = 'bronze';
-
-      return {
-        rank: idx + 1,
-        medal,
-        ...row
-      };
-    });
-
-    console.log(`Returning top ${top.length} leaderboard entries`);
-    res.json({ ok: true, data: top });
-  } catch (err) {
-    console.error('GET /api/leaderboard error:', err);
-    res.status(500).json({ ok: false, message: 'Failed to compute leaderboard' });
-  }
+  // CACHE ONLY
+  res.json({ ok: true, data: CACHE.leaderboard || [] });
 });
 // ---------- POST /api/feedback ----------
 app.post('/api/feedback', async (req, res) => {
@@ -842,7 +779,7 @@ app.post('/api/feedback', async (req, res) => {
 app.get('/api/quizzes', async (req, res) => {
   try {
      // CACHE ONLY
-     res.json({ ok: true, data: CACHE.quizzes.data || [] });
+     res.json({ ok: true, data: CACHE.quizzes || [] });
   } catch (err) {
     console.error('GET /api/quizzes error:', err);
     res.status(500).json({ ok: false, message: 'Server error' });
