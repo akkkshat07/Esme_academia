@@ -826,12 +826,12 @@ app.post('/api/track', async (req, res) => {
       return res.status(400).json({ ok: false, message: 'Missing email/title' });
     }
 
-    // Simplified Completion Logic (User Requirement: 100% threshold, skip everything else)
-    const isCompleted = percent_watched >= 100;
+    // Completion Logic: require 65% actual watch time
+    const isCompleted = percent_watched >= 65;
 
     if (!isCompleted) {
-      // User requested to not update anything if criteria not met
-      return res.json({ ok: true, message: 'Not yet at 100% completion threshold. Record skipped.', completed: false });
+      // Not enough watch time, just log as partial
+      return res.json({ ok: true, message: 'Not yet at 65% completion threshold. Record skipped.', completed: false });
     }
 
     // If we reached here, it is >= 65%
