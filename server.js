@@ -136,27 +136,13 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/login-phone', async (req, res) => {
   try {
     const { phone } = req.body || {};
-    if (!phone) {
-      return res.status(400).json({ ok: false, message: 'Missing phone number' });
-    }
+    if (!phone) return res.status(400).json({ ok: false, message: 'Missing phone number' });
 
-    let rows = [];
-    const now = Date.now();
-
-    if (CACHE.users.data && CACHE.users.expiry > now) {
-       rows = CACHE.users.data;
-    } else {
-       const sheets = await sheetsClient();
-       const rsp = await sheets.spreadsheets.values.get({
-          spreadsheetId: process.env.SHEET_ID,
-          range: 'Sheet1!A2:K'
-       });
-       rows = rsp.data.values || [];
-       CACHE.users.data = rows;
-       CACHE.users.expiry = now + USERS_CACHE_TTL;
-    }
-
+    // CACHE ONLY
+    const rows = CACHE.users.data || [];
     const normalizedPhone = normPhone(phone);
+    
+    // ...existing code...
 
     const user = rows.find((r) => {
       const empid = (r[0] || '').trim();
@@ -198,26 +184,13 @@ app.post('/api/login-phone', async (req, res) => {
 app.post('/api/login-email', async (req, res) => {
   try {
     const { email } = req.body || {};
-    if (!email) {
-      return res.status(400).json({ ok: false, message: 'Missing email' });
-    }
+    if (!email) return res.status(400).json({ ok: false, message: 'Missing email' });
 
-    let rows = [];
-    const now = Date.now();
-    if (CACHE.users.data && CACHE.users.expiry > now) {
-       rows = CACHE.users.data;
-    } else {
-       const sheets = await sheetsClient();
-       const rsp = await sheets.spreadsheets.values.get({
-         spreadsheetId: process.env.SHEET_ID,
-         range: 'Sheet1!A2:K'
-       });
-       rows = rsp.data.values || [];
-       CACHE.users.data = rows;
-       CACHE.users.expiry = now + USERS_CACHE_TTL;
-    }
-
+    // CACHE ONLY
+    const rows = CACHE.users.data || [];
     const normalizedEmail = email.toLowerCase().trim();
+    
+    // ...existing code...
 
     const user = rows.find((r) => {
       const empid = (r[0] || '').trim();
@@ -868,35 +841,11 @@ app.post('/api/feedback', async (req, res) => {
 // ---------- GET /api/quizzes ----------
 app.get('/api/quizzes', async (req, res) => {
   try {
-    const now = Date.now();
-    // Check Cache
-    if (CACHE.quizzes.data && CACHE.quizzes.expiry > now) {
-      console.log('Serving quizzes from cache');
-      return res.json({ ok: true, data: CACHE.quizzes.data });
-    }
-
-    const sheets = await sheetsClient();
-    const rsp = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Quizzes!A2:D'
-    });
-
-    const rows = rsp.data.values || [];
-    const list = rows.map(r => ({
-      quiz_id:     r[0] || '',
-      quiz_title:  r[1] || '',
-      category:    r[2] || '',
-      form_url:    r[3] || ''
-    })).filter(q => q.quiz_id && q.quiz_title);
-
-    // Update Cache
-    CACHE.quizzes.data = list;
-    CACHE.quizzes.expiry = now + CACHE_TTL;
-
-    res.json({ ok: true, data: list });
+     // CACHE ONLY
+     res.json({ ok: true, data: CACHE.quizzes.data || [] });
   } catch (err) {
     console.error('GET /api/quizzes error:', err);
-    res.status(500).json({ ok: false, message: 'Failed to fetch quizzes' });
+    res.status(500).json({ ok: false, message: 'Server error' });
   }
 });
 
