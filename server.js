@@ -65,14 +65,26 @@ app.post('/api/login', async (req, res) => {
         .json({ ok: false, message: 'Missing credentials' });
     }
 
-    const sheets = await sheetsClient();
-    // Sheet1 layout: empid | phone | name | email | role | password | level | ...
-    const rsp = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Sheet1!A2:K'
-    });
+    let rows = [];
+    const now = Date.now();
 
-    const rows = rsp.data.values || [];
+    // Check Users Cache
+    if (CACHE.users.data && CACHE.users.expiry > now) {
+      console.log('Using cached users for login');
+      rows = CACHE.users.data;
+    } else {
+      const sheets = await sheetsClient();
+      // Sheet1 layout: empid | phone | name | email | role | password | level | ...
+      const rsp = await sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.SHEET_ID,
+        range: 'Sheet1!A2:K'
+      });
+      rows = rsp.data.values || [];
+      // Update Cache
+      CACHE.users.data = rows;
+      CACHE.users.expiry = now + USERS_CACHE_TTL;
+    }
+
     const idOrPhone = normPhone(emailOrPhone);
 
     const user = rows.find((r) => {
@@ -128,13 +140,22 @@ app.post('/api/login-phone', async (req, res) => {
       return res.status(400).json({ ok: false, message: 'Missing phone number' });
     }
 
-    const sheets = await sheetsClient();
-    const rsp = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Sheet1!A2:K'
-    });
+    let rows = [];
+    const now = Date.now();
 
-    const rows = rsp.data.values || [];
+    if (CACHE.users.data && CACHE.users.expiry > now) {
+       rows = CACHE.users.data;
+    } else {
+       const sheets = await sheetsClient();
+       const rsp = await sheets.spreadsheets.values.get({
+          spreadsheetId: process.env.SHEET_ID,
+          range: 'Sheet1!A2:K'
+       });
+       rows = rsp.data.values || [];
+       CACHE.users.data = rows;
+       CACHE.users.expiry = now + USERS_CACHE_TTL;
+    }
+
     const normalizedPhone = normPhone(phone);
 
     const user = rows.find((r) => {
@@ -181,13 +202,21 @@ app.post('/api/login-email', async (req, res) => {
       return res.status(400).json({ ok: false, message: 'Missing email' });
     }
 
-    const sheets = await sheetsClient();
-    const rsp = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Sheet1!A2:K'
-    });
+    let rows = [];
+    const now = Date.now();
+    if (CACHE.users.data && CACHE.users.expiry > now) {
+       rows = CACHE.users.data;
+    } else {
+       const sheets = await sheetsClient();
+       const rsp = await sheets.spreadsheets.values.get({
+         spreadsheetId: process.env.SHEET_ID,
+         range: 'Sheet1!A2:K'
+       });
+       rows = rsp.data.values || [];
+       CACHE.users.data = rows;
+       CACHE.users.expiry = now + USERS_CACHE_TTL;
+    }
 
-    const rows = rsp.data.values || [];
     const normalizedEmail = email.toLowerCase().trim();
 
     const user = rows.find((r) => {
@@ -507,10 +536,14 @@ const CACHE = {
   leaderboard: { data: null, expiry: 0 },
   courses: { data: null, expiry: 0 },
   quizzes: { data: null, expiry: 0 },
-  assigned: {} // Map key (email) -> { data: ..., expiry: ... }
+  users: { data: null, expiry: 0 }, // Added users cache
+  assigned: {}, // Map key (email) -> { data: ..., expiry: ... }
+  assignedQuizzes: {}, // Map key (email) -> { data: ..., expiry: ... } 
+  quizMaster: { data: null, expiry: 0 } // Cache quiz master list separate from assigned
 };
 
 const CACHE_TTL = 60 * 1000; // 60 seconds
+const USERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for users
 
 // ---------- GET /api/courses/filter?language=... ----------
 // Filter courses by language
@@ -835,6 +868,13 @@ app.post('/api/feedback', async (req, res) => {
 // ---------- GET /api/quizzes ----------
 app.get('/api/quizzes', async (req, res) => {
   try {
+    const now = Date.now();
+    // Check Cache
+    if (CACHE.quizzes.data && CACHE.quizzes.expiry > now) {
+      console.log('Serving quizzes from cache');
+      return res.json({ ok: true, data: CACHE.quizzes.data });
+    }
+
     const sheets = await sheetsClient();
     const rsp = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SHEET_ID,
@@ -848,6 +888,10 @@ app.get('/api/quizzes', async (req, res) => {
       category:    r[2] || '',
       form_url:    r[3] || ''
     })).filter(q => q.quiz_id && q.quiz_title);
+
+    // Update Cache
+    CACHE.quizzes.data = list;
+    CACHE.quizzes.expiry = now + CACHE_TTL;
 
     res.json({ ok: true, data: list });
   } catch (err) {
