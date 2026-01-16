@@ -1,21 +1,20 @@
-// Admin API (ESM) – upload to Firebase Storage and append to Google Sheet
-import 'dotenv/config';
-import fs from 'fs';
-import path from 'path';
-import express from 'express';
-import cors from 'cors';
-import multer from 'multer';
-import dayjs from 'dayjs';
-import { google } from 'googleapis';
-import admin from 'firebase-admin';
-import nodemailer from 'nodemailer';
-import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import MarkdownIt from 'markdown-it';
+// Admin API (CommonJS) – upload to Firebase Storage and append to Google Sheet
+require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const dayjs = require('dayjs');
+const { google } = require('googleapis');
+const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
+const { v4: uuidv4 } = require('uuid');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const MarkdownIt = require('markdown-it');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+const __filename = __filename || '';
+const __dirname = __dirname || path.dirname(require.main.filename);
 
 const app = express();
 app.use(cors());
