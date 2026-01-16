@@ -571,33 +571,10 @@ function detectLanguage(row) {
 }
 
 // ---------- GET /api/courses ----------
+// Serves from CACHE ONLY - Zero Latency
 app.get('/api/courses', async (req, res) => {
   try {
-    const sheets = await sheetsClient();
-    const resp = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
-      range: 'Courses!A2:J'
-    });
-
-    const rows = resp.data.values || [];
-    const list = rows.map((r) => {
-      const lang = detectLanguage(r);
-      return {
-        mainCategory: r[0] || '',
-        subcategory: r[1] || '',
-        topic: r[2] || '',
-        title: r[3] || '',
-        description: r[4] || '',
-        url: r[5] || '',
-        duration_seconds: Number(r[6] || 0),
-        type: (r[7] || 'video').toLowerCase(),
-        thumbnailUrl: r[8] || '',
-        downloadAllowed: /^y(es)?$/i.test(String(r[9] || '').trim()),
-        language: lang
-      }
-    });
-
-    res.json({ ok: true, data: list });
+    res.json({ ok: true, data: CACHE.courses || [] });
   } catch (e) {
     console.error('GET /api/courses error:', e.message);
     res.status(500).json({ ok: false, message: 'Failed to fetch courses' });
